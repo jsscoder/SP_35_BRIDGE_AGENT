@@ -12,10 +12,11 @@ WSL2: Ubuntu + docker-desktop both Running (v2); WSL sees same GPU
 - WSL2 Ubuntu: system python 3.14.4; torch not installed yet.
   GPU passthrough confirmed working.
 
-## Decision
-Standard: **WSL2 Ubuntu 24.04 + Python 3.12 + PyTorch cu128 (CUDA 12.8)** for
-the GPU worker. Follows SAM 3 recommendation and AGENTS.md stack.
-Native Windows kept only for CPU work (engine, app, reports).
+## Decision (updated 2026-10-07, user direction)
+Standard: **native Windows + Python 3.12 (`sp35-bridge-ai/.venv-win`) + PyTorch 2.11 cu128 (CUDA 12.8)**
+for the GPU worker. WSL2 Ubuntu venv (`~/sp35wsl`, torch 2.11 cu128, CUDA True)
+kept as fallback. Gated access to `facebook/sam3.1` verified OK (sha daa63191845a);
+token injected per-command from User registry, never logged.
 
 ## Next (Task 0.4)
 In WSL2: create `uv` venv with Python 3.12 + `torch>=2.7` cu128,
