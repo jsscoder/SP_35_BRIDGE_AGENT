@@ -12,3 +12,5 @@ jobs:
         run: uv run --with pyyaml python tools/sp35_reference_check.py
       - name: Tests
         run: uv run --group dev pytest -q
+      - name: Phase-0 verification
+        run: uv run --with pyyaml python tools/verify_phase0.py
