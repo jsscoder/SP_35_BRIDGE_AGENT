@@ -1,0 +1,119 @@
+# IRC:SP:35-2024 Table 7.3 — distress types for approaches / wearing course
+# Source: book pp. 108-110; reference photos in Table 7.5 (pp. 118-129).
+# Same conventions as distress_bridge.yaml (`printed`, `bands`, `criteria`; decision E7).
+
+kb_version: sp35_2024-kb0
+source: "IRC:SP:35-2024, Table 7.3, pp. 108-110; Table 7.5, pp. 118-129"
+table: "7.3"
+status: draft-for-signoff
+s_k: {I: 0.0, II: 0.25, III: 0.5, IV: 0.75, V: 1.0}
+
+distresses:
+  - {id: T7.3-01, name: Alligator (fatigue) cracking, unit: "%",
+     printed: {I: Nil, II: "1-5", III: "6-15", IV: "16-30", V: ">30"},
+     bands:   {I: "=0", II: "(0,5]", III: "(5,15]", IV: "(15,30]", V: "(30,inf)"}}
+  - {id: T7.3-02, name: Longitudinal cracking, unit: mm,
+     printed: {I: Nil, II: "<=5", III: "6-10", IV: "11-20", V: ">20"},
+     bands:   {I: "=0", II: "(0,5]", III: "(5,10]", IV: "(10,20]", V: "(20,inf)"}}
+  - {id: T7.3-03, name: Transverse cracking, unit: mm,
+     printed: {I: Nil, II: "<=5", III: "6-10", IV: "11-20", V: ">20"},
+     bands:   {I: "=0", II: "(0,5]", III: "(5,10]", IV: "(10,20]", V: "(20,inf)"},
+     note: "Table 7.5 shows flexible and rigid pavement photos separately; same ranges."}
+  - {id: T7.3-04, name: Block cracking, unit: "%",
+     printed: {I: Nil, II: "1-5", III: "6-15", IV: "16-30", V: ">30"},
+     bands:   {I: "=0", II: "(0,5]", III: "(5,15]", IV: "(15,30]", V: "(30,inf)"}}
+  - {id: T7.3-05, name: Reflection cracking, unit: mm,
+     printed: {I: Nil, II: "<=5", III: "6-10", IV: "11-20", V: ">20"},
+     bands:   {I: "=0", II: "(0,5]", III: "(5,10]", IV: "(10,20]", V: "(20,inf)"}}
+  - {id: T7.3-06, name: Edge cracking, unit: mm,
+     printed: {I: Nil, II: "1-5", III: "6-15", IV: "16-30", V: ">30"},
+     bands:   {I: "=0", II: "(0,5]", III: "(5,15]", IV: "(15,30]", V: "(30,inf)"}}
+  - {id: T7.3-07, name: Slippage, unit: "%",
+     printed: {I: Nil, II: "1-5", III: "6-15", IV: "16-30", V: ">30"},
+     bands:   {I: "=0", II: "(0,5]", III: "(5,15]", IV: "(15,30]", V: "(30,inf)"}}
+  - {id: T7.3-08, name: Bleeding, unit: "%",
+     printed: {I: Nil, II: "<10", III: "10-20", IV: "21-50", V: ">50"},
+     bands:   {I: "=0", II: "(0,10)", III: "[10,20]", IV: "(20,50]", V: "(50,inf)"}}
+  - id: T7.3-09
+    name: Settlement/bumps/heave
+    printed: {I: Nil, II: "1/<=15", III: "2/16-30", IV: "3-5/31-50", V: ">5/>50"}
+    criteria:
+      - unit: No.
+        bands: {I: "=0", II: "(0,1]", III: "(1,2]", IV: "(2,5]", V: "(5,inf)"}
+      - unit: mm
+        bands: {I: "=0", II: "(0,15]", III: "(15,30]", IV: "(30,50]", V: "(50,inf)"}
+  - {id: T7.3-10, name: Potholes, unit: No.,
+     printed: {I: Nil, II: "<2", III: "2-5", IV: "6-8", V: ">8"},
+     bands:   {I: "=0", II: "(0,2)", III: "[2,5]", IV: "(5,8]", V: "(8,inf)"}}
+  - {id: T7.3-11, name: Patching, unit: "%",
+     printed: {I: Nil, II: "0-5", III: "6-15", IV: "16-30", V: ">30"},
+     bands:   {I: "=0", II: "(0,5]", III: "(5,15]", IV: "(15,30]", V: "(30,inf)"}}
+  - {id: T7.3-12, name: Pumping, unit: "%",
+     printed: {I: Nil, II: "<10", III: "10-15", IV: "16-25", V: ">25"},
+     bands:   {I: "=0", II: "(0,10)", III: "[10,15]", IV: "(15,25]", V: "(25,inf)"}}
+  - {id: T7.3-13, name: Ravelling, unit: "%",
+     printed: {I: Nil, II: "<=25", III: "25-50", IV: "51-75", V: ">75"},
+     bands:   {I: "=0", II: "(0,25]", III: "(25,50]", IV: "(50,75]", V: "(75,inf)"}}
+  - {id: T7.3-14, name: Rutting, unit: mm,
+     printed: {I: Nil, II: "<5", III: "5-15", IV: "16-25", V: ">25"},
+     bands:   {I: "=0", II: "(0,5)", III: "[5,15]", IV: "(15,25]", V: "(25,inf)"}}
+  - {id: T7.3-15, name: Shoving/corrugation, unit: mm,
+     printed: {I: Nil, II: "<5", III: "5-10", IV: "11-25", V: ">25"},
+     bands:   {I: "=0", II: "(0,5)", III: "[5,10]", IV: "(10,25]", V: "(25,inf)"}}
+  - {id: T7.3-16, name: Rain cuts, unit: No.,
+     printed: {I: "1-5", II: "6-10", III: "11-15", IV: "16-20", V: ">20"},
+     bands:   {I: "[0,5]", II: "(5,10]", III: "(10,15]", IV: "(15,20]", V: "(20,inf)"}}
+  - {id: T7.3-17, name: Lane/shoulder drop, unit: mm,
+     printed: {I: Nil, II: "<25", III: "25-50", IV: "51-100", V: ">100"},
+     bands:   {I: "=0", II: "(0,25)", III: "[25,50]", IV: "(50,100]", V: "(100,inf)"}}
+  - {id: T7.3-18, name: Missing elements, unit: No.,
+     printed: {I: Nil, II: "<5", III: "5-10", IV: "11-15", V: ">15"},
+     bands:   {I: "=0", II: "(0,5)", III: "[5,10]", IV: "(10,15]", V: "(15,inf)"}}
+  - {id: T7.3-19, name: Erosion, unit: "%",
+     printed: {I: "<5", II: "5-15", III: "16-30", IV: "31-50", V: ">50"},
+     bands:   {I: "[0,5)", II: "[5,15]", III: "(15,30]", IV: "(30,50]", V: "(50,inf)"}}
+  - {id: T7.3-20, name: Silting of joints, unit: "%",
+     printed: {I: "<5", II: "5-15", III: "16-30", IV: "31-50", V: ">50"},
+     bands:   {I: "[0,5)", II: "[5,15]", III: "(15,30]", IV: "(30,50]", V: "(50,inf)"}}
+  - {id: T7.3-21, name: Damage to drainage components (walls etc.), unit: "% severity",
+     printed: {I: "<10", II: "10-25", III: "26-45", IV: "46-60", V: ">60"},
+     bands:   {I: "[0,10)", II: "[10,25]", III: "(25,45]", IV: "(45,60]", V: "(60,inf)"}}
+  - {id: T7.3-22, name: "\"D\" cracking", unit: m2,
+     printed: {I: Nil, II: "<5", III: "5-10", IV: "11-15", V: ">15"},
+     bands:   {I: "=0", II: "(0,5)", III: "[5,10]", IV: "(10,15]", V: "(15,inf)"}}
+  - {id: T7.3-23, name: Faulting, unit: mm,
+     printed: {I: Nil, II: "<5", III: "5-10", IV: "11-25", V: ">25"},
+     bands:   {I: "=0", II: "(0,5)", III: "[5,10]", IV: "(10,25]", V: "(25,inf)"}}
+  - {id: T7.3-24, name: Joint damage, unit: "%",
+     printed: {I: Nil, II: "<10", III: "10-30", IV: "31-50", V: ">50"},
+     bands:   {I: "=0", II: "(0,10)", III: "[10,30]", IV: "(30,50]", V: "(50,inf)"}}
+  - {id: T7.3-25, name: Blowup, unit: mm,
+     printed: {I: Nil, II: "<6", III: "6-25", IV: "26-50", V: ">50"},
+     bands:   {I: "=0", II: "(0,6)", III: "[6,25]", IV: "(25,50]", V: "(50,inf)"}}
+  - {id: T7.3-26, name: Scaling, unit: "%",
+     printed: {I: "<5", II: "5-15", III: "16-30", IV: "31-50", V: ">50"},
+     bands:   {I: "[0,5)", II: "[5,15]", III: "(15,30]", IV: "(30,50]", V: "(50,inf)"}}
+  - {id: T7.3-27, name: Pop out, unit: m2,
+     printed: {I: Nil, II: "<3", III: "3-6", IV: "7-9", V: ">9"},
+     bands:   {I: "=0", II: "(0,3)", III: "[3,6]", IV: "(6,9]", V: "(9,inf)"}}
+  - {id: T7.3-28, name: Punch out, unit: mm,
+     printed: {I: Nil, II: "<75", III: "75-110", IV: "111-150", V: ">150"},
+     bands:   {I: "=0", II: "(0,75)", III: "[75,110]", IV: "(110,150]", V: "(150,inf)"}}
+  - {id: T7.3-29, name: Lane/shoulder separation, unit: mm,
+     printed: {I: Nil, II: "<10", III: "10-20", IV: "21-50", V: ">50"},
+     bands:   {I: "=0", II: "(0,10)", III: "[10,20]", IV: "(20,50]", V: "(50,inf)"}}
+  - {id: T7.3-30, name: Shattered slab, unit: No.,
+     printed: {I: Nil, II: "<3", III: "3", IV: "4-6", V: ">6"},
+     bands:   {I: "=0", II: "(0,3)", III: "[3,3]", IV: "(3,6]", V: "(6,inf)"}}
+  - {id: T7.3-31, name: Corner spalling, unit: mm,
+     printed: {I: Nil, II: "<25", III: "25-35", IV: "36-50", V: ">50"},
+     bands:   {I: "=0", II: "(0,25)", III: "[25,35]", IV: "(35,50]", V: "(50,inf)"}}
+  - {id: T7.3-32, name: Vegetation, unit: "%",
+     printed: {I: Nil, II: "<25", III: "25-50", IV: "51-75", V: ">75"},
+     bands:   {I: "=0", II: "(0,25)", III: "[25,50]", IV: "(50,75]", V: "(75,inf)"}}
+  - {id: T7.3-33, name: Corner break, unit: "%",
+     printed: {I: Nil, II: "<25", III: "25-35", IV: "36-50", V: ">50"},
+     bands:   {I: "=0", II: "(0,25)", III: "[25,35]", IV: "(35,50]", V: "(50,inf)"}}
+  - {id: T7.3-34, name: Polished aggregate, unit: "%",
+     printed: {I: Nil, II: "<20", III: "20-45", IV: "46-70", V: ">70"},
+     bands:   {I: "=0", II: "(0,20)", III: "[20,45]", IV: "(45,70]", V: "(70,inf)"}}

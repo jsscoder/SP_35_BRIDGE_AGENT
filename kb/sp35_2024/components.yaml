@@ -1,0 +1,119 @@
+# IRC:SP:35-2024 Table 7.1 — Relative weights of bridge components and sub-components
+# Source: book pp. 102-105 (AHP survey of Indian bridge experts, 9-point pairwise scale).
+# Use `weight` of each component (Table 7.1 column 3) and of each sub-component (column 5) ONLY.
+# Column 6 ("overall %") is NOT stored: it contains misprints (E5). Compute it if needed as W_i * W_j / 100.
+# Main weights total 99.9; groups C1 and C6 total 99.9. Eq. 1 and Eq. 2 divide by the actual sum (E6).
+# SP:35 allows rearranging or adding components as long as weights total 100 — any change is a new KB version.
+
+kb_version: sp35_2024-kb0
+source: "IRC:SP:35-2024, Table 7.1, pp. 102-105"
+status: draft-for-signoff   # becomes `signed` at gate G0
+
+components:
+  - code: C1
+    name: Approaches
+    weight: 3.6
+    subcomponents:
+      - {code: C1.1, name: Alignment, weight: 16.0}
+      - {code: C1.2, name: Signages, weight: 5.8}
+      - {code: C1.3, name: Embankment/cutting, weight: 12.9}
+      - {code: C1.4, name: Railing/crash barriers/guard stones/parapet, weight: 15.2}
+      - {code: C1.5, name: Approach slab, weight: 9.7}
+      - {code: C1.6, name: Approach joint, weight: 9.9}
+      - {code: C1.7, name: Side drains, weight: 10.3}      # printed col.6 0.31 is a misprint (0.37)
+      - {code: C1.8, name: Slope protection, weight: 20.1}
+
+  - code: C2
+    name: Substructure
+    weight: 18.0
+    subcomponents:
+      - {code: C2.1, name: Abutment, weight: 14.2}
+      - {code: C2.2, name: Abutment cap, weight: 11.1}
+      - {code: C2.3, name: Dirt wall, weight: 5.2}
+      - {code: C2.4, name: Weep holes, weight: 4.5}
+      - {code: C2.5, name: Wing walls, weight: 7.1}
+      - {code: C2.6, name: Abutment protection works, weight: 9.0}
+      - {code: C2.7, name: Pier, weight: 21.8}
+      - {code: C2.8, name: Pier cap, weight: 14.6}
+      - {code: C2.9, name: Pier protection works, weight: 12.5}
+
+  - code: C3
+    name: Waterway/channel
+    weight: 5.8
+    subcomponents:
+      - {code: C3.1, name: River/channel bed, weight: 4.0}
+      - {code: C3.2, name: Guide bunds, weight: 13.0}
+      - {code: C3.3, name: Spurs, weight: 8.4}            # printed col.6 1.24 is a misprint (0.49)
+      - {code: C3.4, name: Retaining wall, weight: 15.0}
+      - {code: C3.5, name: Toe walls, weight: 7.6}
+      - {code: C3.6, name: Floor/channel protection, weight: 12.0}
+      - {code: C3.7, name: Apron, weight: 11.3}
+      - {code: C3.8, name: Curtain/cutoff walls, weight: 14.7}
+      - {code: C3.9, name: Ground/rock anchors, weight: 14.0}
+
+  - code: C4
+    name: Foundations
+    weight: 32.7
+    visibility: rarely_visible   # §7.5.1: rate from shift, tilt, displacement/deformation of components above
+    subcomponents:
+      - {code: C4.1, name: Foundations (raft/open/pile/well), weight: 66.0}
+      - {code: C4.2, name: Apron, weight: 13.9}
+      - {code: C4.3, name: Foundation protection, weight: 20.1}
+
+  - code: C5
+    name: Superstructure
+    weight: 21.7
+    subcomponents:
+      - {code: C5.1, name: Girders/main beams, weight: 35.0}
+      - {code: C5.2, name: Cross beams/diaphragms, weight: 14.2}
+      - {code: C5.3, name: Articulation, weight: 12.7}
+      - {code: C5.4, name: Deck slab, weight: 15.1}
+      - {code: C5.5, name: Cantilever slab, weight: 13.2}
+      - {code: C5.6, name: Joints, weight: 9.8}
+
+  - code: C6
+    name: Appurtenances/auxiliary works
+    weight: 4.1
+    subcomponents:
+      - {code: C6.1, name: Wearing surface, weight: 7.9}
+      - {code: C6.2, name: Footpaths, weight: 7.3}
+      - {code: C6.3, name: Expansion joints, weight: 17.8}
+      - {code: C6.4, name: Prestressing elements (anchorages etc.), weight: 18.7}
+      - {code: C6.5, name: Median, weight: 4.8}
+      - {code: C6.6, name: Kerbs/cornices, weight: 4.6}
+      - {code: C6.7, name: Light posts, weight: 3.7}
+      - {code: C6.8, name: Drainage spouts, weight: 7.4}
+      - {code: C6.9, name: Parapet/railing/guard stones/crash barrier, weight: 11.9}
+      - {code: C6.10, name: Waterproofing system, weight: 7.6}
+      - {code: C6.11, name: Painting system, weight: 4.3}
+      - {code: C6.12, name: Utilities, weight: 3.9}
+
+  - code: C7
+    name: Bearings
+    weight: 14.0
+    subcomponents:
+      - {code: C7.1, name: Bearings, weight: 50.0}
+      - {code: C7.2, name: Bearing seats/caps, weight: 25.4}
+      - {code: C7.3, name: Earthquake restraints/stoppers, weight: 24.6}
+
+# Span model (§7.5.1, book p.131): single span -> both abutments; two spans -> each span with its
+# abutment and the pier; multiple spans -> end spans (abutment + adjacent pier) and intermediate
+# spans (both piers). Bridge BHI = minimum span BHI.
+# SP:35 does not say how two supports of one span combine, or where approaches/waterway sit.
+# The defaults below are decision E14 (needs engineer sign-off at G0).
+span_model:
+  decision: E14
+  support_types:
+    abutment: [C2.1, C2.2, C2.3, C2.4, C2.5, C2.6]
+    pier: [C2.7, C2.8, C2.9]
+  scope:
+    C1: end_spans_only          # each end span takes its own approach
+    C2: per_support             # span takes the worse CS_j of its two supports, per sub-component
+    C3: bridge_level            # applied to every span
+    C4: per_support             # foundations belong to supports; worse of the two
+    C5: per_span
+    C6: per_span
+    C7: per_support             # bearings on the two support lines under the span; worse of the two
+  not_in_span: exclude          # e.g. C1 for an intermediate span: left out of both sums in Eq. 1
+  absent_element: na_scores_100 # element missing on the bridge: report NA, CS_j = 100 (book p.131)
+  bridge_bhi: min_over_spans

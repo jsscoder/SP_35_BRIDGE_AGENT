@@ -1,0 +1,114 @@
+# IRC:SP:35-2024 Maintenance Priority Index — Tables 7.7, 7.8, 7.9 (book pp. 136-144)
+# Eq. 4: MPI = sum(W_i * FR_i) / sum(W_i)      Eq. 5: FR_i = sum(W_j * PR_j) / sum(W_j)
+# PR_j in {0, 25, 50, 75, 100}. Higher MPI = higher maintenance priority.
+# Only F7 (bridge condition) comes from the inspection; everything else is office data.
+# F3.3 and F3.5 use the Table 7.9 values (8.29, 31.69) rather than Table 7.7 (8.3, 32) — decision E10.
+# `classes` map an input to PR. Numeric classes use interval strings like distress_*.yaml.
+# A missing PR level in the book is simply absent here (e.g. Seismic has no 0 class).
+
+kb_version: sp35_2024-kb0
+source: "IRC:SP:35-2024, Tables 7.7-7.9, pp. 136-144"
+status: draft-for-signoff
+
+factors:
+  - code: F1
+    name: Bridge geometry
+    weight: 4.38
+    subfactors:
+      - code: F1.1
+        name: Length of the bridge
+        weight: 16.27
+        unit: m
+        classes: {"(0,10)": 25, "[10,30]": 50, "(30,60]": 75, "(60,inf)": 100}
+      - code: F1.2
+        name: Carriageway width
+        weight: 10.67
+        unit: m
+        classes: {"(0,3.75)": 25, "[3.75,7]": 50, "(7,14]": 75, "(14,inf)": 100}
+      - code: F1.3
+        name: Waterway
+        weight: 42.85
+        unit: m2
+        classes: {"(0,10)": 25, "[10,100]": 50, "(100,500]": 75, "(500,inf)": 100}
+      - code: F1.4
+        name: Clearances
+        weight: 30.21
+        classes: {Adequate: 0, Inadequate: 100}
+
+  - code: F2
+    name: Maintenance policy
+    weight: 8.67
+    subfactors:
+      - {code: F2.1, name: Future planning considerations, weight: 5.78, classes: {"No": 0, "Yes": 100}}
+      - code: F2.2
+        name: Safety of road users
+        weight: 30.73
+        classes: {"No": 0, Least important: 25, Moderately important: 50, Largely important: 75, Extremely important: 100}
+      - {code: F2.3, name: Maintenance policy, weight: 12.70, classes: {Preventive: 50, Reactive: 100}}
+      - code: F2.4
+        name: Obsolescence of bridge
+        weight: 9.92
+        classes: {Useful: 0, Least obsolete: 25, Moderately obsolete: 50, Large: 75, Extreme: 100}
+      - code: F2.5
+        name: Deterioration rate
+        weight: 40.87
+        classes: {Least: 0, Moderate: 25, Strong: 50, Very strong: 75, Extreme: 100}
+
+  - code: F3
+    name: Fund utilization
+    weight: 5.33
+    subfactors:
+      - {code: F3.1, name: Fund availability, weight: 15.15, classes: {"80%": 25, "70%": 50, "60%": 75, "50%": 100}}
+      - {code: F3.2, name: Maintenance cost, weight: 20.22, classes: {Extreme: 25, Large: 50, Moderate: 75, Least: 100}}
+      - {code: F3.3, name: Diversion cost, weight: 8.29, classes: {Extreme: 0, Large: 25, Moderate: 50, Least: 75, "No": 100}}
+      - {code: F3.4, name: Life cycle cost (LCC), weight: 24.63, classes: {"No": 0, "Yes": 100}}
+      - {code: F3.5, name: Optimal utilization of funds, weight: 31.69, classes: {"No": 0, "Yes": 100}}
+
+  - code: F4
+    name: Bridge design factors
+    weight: 8.05
+    subfactors:
+      - {code: F4.1, name: Environment, weight: 10.48, classes: {Normal: 0, Low intensity: 25, Medium intensity: 50, High intensity: 75, Severe intensity: 100}}
+      - {code: F4.2, name: Load carrying capacity, weight: 30.41, classes: {Adequate: 0, Inadequate: 100}}
+      - code: F4.3
+        name: Age
+        weight: 15.31
+        unit: years
+        classes: {"[0,10)": 0, "[10,20]": 25, "(20,40]": 50, "(40,60]": 75, "(60,inf)": 100}
+      - {code: F4.4, name: Seismic vulnerability, weight: 43.81, classes: {Zone II: 25, Zone III: 50, Zone IV: 75, Zone V: 100}}
+
+  - code: F5
+    name: Urgency of maintenance
+    weight: 22.22
+    subfactors:
+      - {code: F5.1, name: Public demand, weight: 8.82, classes: {"No": 0, Least: 25, Moderate: 50, Large: 75, Extreme: 100}}
+      - {code: F5.2, name: Economic development of area, weight: 17.63, classes: {"No": 0, Least: 25, Moderate: 50, Large: 75, Extreme: 100}}
+      - {code: F5.3, name: Emergency, weight: 73.55, classes: {"No": 0, Least urgent: 25, Moderate urgent: 50, Urgent: 75, Extremely urgent: 100}}
+
+  - code: F6
+    name: Bridge importance
+    weight: 18.58
+    subfactors:
+      - {code: F6.1, name: Strategic importance, weight: 34.47, classes: {"No": 0, Least: 25, Moderate: 50, Large: 75, Extreme: 100}}
+      - {code: F6.2, name: Location, weight: 11.35, classes: {Least significant: 0, Moderately significant: 25, Strongly significant: 50, Very strongly significant: 75, Extremely significant: 100}}
+      - {code: F6.3, name: Category of road, weight: 10.97, classes: {Other District Roads: 0, Major District Roads: 25, State Highways: 50, National Highways: 75, Expressways: 100}}
+      - code: F6.4
+        name: Traffic volume
+        weight: 43.21
+        unit: CVD          # commercial vehicles per day
+        classes: {"[0,150)": 0, "[150,450]": 25, "(450,1500]": 50, "(1500,4500]": 75, "(4500,inf)": 100}
+
+  - code: F7
+    name: Bridge condition
+    weight: 29.68
+    subfactors:
+      - {code: F7, name: Bridge condition, weight: 100, classes: {Excellent: 0, Good: 25, Fair: 50, Poor: 75, Critical: 100}}
+    # Decision E9: derive the class from BHI using the star bands in condition_states.yaml.
+    # The book's Table 7.9 example instead uses 50 (BHI 75.69) and 25 (BHI 85.66); golden_examples.yaml keeps those.
+    from_bhi: star_bands
+
+  - code: F8
+    name: Administrative considerations
+    weight: 3.09
+    subfactors:
+      - {code: F8, name: Administrative considerations, weight: 100, classes: {"No": 0, Least: 25, Moderate: 50, Large: 75, Extreme: 100}}

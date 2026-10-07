@@ -1,0 +1,210 @@
+# IRC:SP:35-2024 Table 7.2 — distress types and ranges for condition states (concrete bridges)
+# Source: book pp. 106-107; reference photos in Table 7.4 (pp. 111-117; p.117 missing from our scan, E12).
+#
+# `printed`  = the book's text for states I..V, kept for display and audit.
+# `bands`    = machine intervals per state (decision E7, needs engineer sign-off):
+#              "=0" exact zero (printed "Nil"); "(a,b]", "[a,b)", "[a,b]", "(a,b)"; "inf" = no upper bound;
+#              null = state cannot occur for this distress.
+# Gaps and overlaps in the printed ranges are resolved so every value maps to exactly one state:
+#   printed "<a" for II followed by "a-b" for III  -> II "(0,a)",  III "[a,b]"
+#   printed "a-b" followed by "(b+1)-c"            -> next band starts "(b,"
+# `criteria` (instead of unit/bands) = two measures; the WORSE resulting state applies.
+# Units: % = share of the member's area/length affected; mm, m = measured; No. = count.
+
+kb_version: sp35_2024-kb0
+source: "IRC:SP:35-2024, Table 7.2, pp. 106-107; Table 7.4, pp. 111-117"
+table: "7.2"
+status: draft-for-signoff
+s_k: {I: 0.0, II: 0.25, III: 0.5, IV: 0.75, V: 1.0}
+
+distresses:
+  - id: T7.2-01
+    name: Erosion
+    unit: "%"
+    printed: {I: Nil, II: "0-10", III: "11-20", IV: "21-30", V: ">30"}
+    bands:   {I: "=0", II: "(0,10]", III: "(10,20]", IV: "(20,30]", V: "(30,inf)"}
+
+  - id: T7.2-02
+    name: Abrasion
+    unit: "%"
+    printed: {I: "<10", II: "10-20", III: "21-40", IV: "41-50", V: ">50"}
+    bands:   {I: "[0,10)", II: "[10,20]", III: "(20,40]", IV: "(40,50]", V: "(50,inf)"}
+
+  - id: T7.2-03
+    name: Scour (depth from ground level)
+    unit: m
+    printed: {I: Nil, II: "<0.25", III: "0.26-0.50", IV: "0.51-1.0", V: ">1.0"}
+    bands:   {I: "=0", II: "(0,0.25]", III: "(0.25,0.5]", IV: "(0.5,1.0]", V: "(1.0,inf)"}
+
+  - id: T7.2-04
+    name: Vegetation
+    printed: {I: Nil, II: "2/<10-25", III: "5/26-50", IV: "10/51-75", V: ">10/75"}
+    criteria:
+      - unit: No.
+        bands: {I: "=0", II: "(0,2]", III: "(2,5]", IV: "(5,10]", V: "(10,inf)"}
+      - unit: "%"
+        bands: {I: "=0", II: "(0,25]", III: "(25,50]", IV: "(50,75]", V: "(75,inf)"}
+    note: "Printed II '2/<10-25' is ambiguous; read as up to 2 plants or up to 25 % cover."
+
+  - id: T7.2-05
+    name: Deformations (deflection/tilt)
+    unit: mm
+    printed: {I: Nil, II: "<5", III: "5-10", IV: "11-50", V: ">50"}
+    bands:   {I: "=0", II: "(0,5)", III: "[5,10]", IV: "(10,50]", V: "(50,inf)"}
+
+  - id: T7.2-06
+    name: Honeycombing
+    unit: "%"
+    printed: {I: Nil, II: "<5", III: "5-15", IV: "16-25", V: ">25"}
+    bands:   {I: "=0", II: "(0,5)", III: "[5,15]", IV: "(15,25]", V: "(25,inf)"}
+
+  - id: T7.2-07
+    name: Delamination
+    unit: "%"
+    printed: {I: Nil, II: "<5", III: "5-15", IV: "16-25", V: ">25"}
+    bands:   {I: "=0", II: "(0,5)", III: "[5,15]", IV: "(15,25]", V: "(25,inf)"}
+    note: "Not reliably visible in photos; needs hammer sounding or thermal survey."
+
+  - id: T7.2-08
+    name: Spalling
+    unit: "%"
+    printed: {I: Nil, II: "<5", III: "5-10", IV: "11-20", V: ">20"}
+    bands:   {I: "=0", II: "(0,5)", III: "[5,10]", IV: "(10,20]", V: "(20,inf)"}
+
+  - id: T7.2-09
+    name: Staining/scaling/leaching
+    unit: "%"
+    printed: {I: Nil, II: "<10", III: "10-25", IV: "26-50", V: ">50"}
+    bands:   {I: "=0", II: "(0,10)", III: "[10,25]", IV: "(25,50]", V: "(50,inf)"}
+
+  - id: T7.2-10
+    name: Rust
+    unit: "%"
+    printed: {I: Nil, II: "<5", III: "5-10", IV: "11-25", V: ">25"}
+    bands:   {I: "=0", II: "(0,5)", III: "[5,10]", IV: "(10,25]", V: "(25,inf)"}
+
+  - id: T7.2-11
+    name: Cracking (width)
+    unit: mm
+    printed: {I: Nil, II: "<=0.3", III: "0.3-1.0", IV: "1.1-2", V: ">2"}
+    bands:   {I: "=0", II: "(0,0.3]", III: "(0.3,1.0]", IV: "(1.0,2.0]", V: "(2.0,inf)"}
+
+  - id: T7.2-12
+    name: Exposed reinforcement
+    unit: "%"
+    printed: {I: Nil, II: "<5", III: "5-10", IV: "11-15", V: ">15"}
+    bands:   {I: "=0", II: "(0,5)", III: "[5,10]", IV: "(10,15]", V: "(15,inf)"}
+
+  - id: T7.2-13
+    name: Reduction in area of reinforcement
+    unit: "%"
+    printed: {I: Nil, II: "<5", III: "5-10", IV: "11-20", V: ">20"}
+    bands:   {I: "=0", II: "(0,5)", III: "[5,10]", IV: "(10,20]", V: "(20,inf)"}
+
+  - id: T7.2-14
+    name: Section loss
+    unit: "%"
+    printed: {I: "<5", II: "5-10", III: "11-15", IV: "16-25", V: ">25"}
+    bands:   {I: "[0,5)", II: "[5,10]", III: "(10,15]", IV: "(15,25]", V: "(25,inf)"}
+
+  - id: T7.2-15
+    name: Efflorescence
+    unit: "%"
+    printed: {I: Nil, II: "<10", III: "11-25", IV: "26-50", V: ">50"}
+    bands:   {I: "=0", II: "(0,10]", III: "(10,25]", IV: "(25,50]", V: "(50,inf)"}
+
+  - id: T7.2-16
+    name: Crushing
+    unit: "%"
+    printed: {I: Nil, II: Nil, III: "<5", IV: "5-10", V: ">10"}
+    bands:   {I: "=0", II: null, III: "(0,5)", IV: "[5,10]", V: "(10,inf)"}
+    note: "Any crushing at all is at least state III."
+
+  - id: T7.2-17
+    name: Rutting
+    unit: mm
+    printed: {I: Nil, II: "<10", III: "10-25", IV: "26-50", V: ">50"}
+    bands:   {I: "=0", II: "(0,10)", III: "[10,25]", IV: "(25,50]", V: "(50,inf)"}
+
+  - id: T7.2-18
+    name: Unevenness
+    unit: "%"
+    printed: {I: Nil, II: "<5", III: "5-15", IV: "16-25", V: ">25"}
+    bands:   {I: "=0", II: "(0,5)", III: "[5,15]", IV: "(15,25]", V: "(25,inf)"}
+
+  - id: T7.2-19
+    name: Degradation (wear and tear)
+    unit: "%"
+    printed: {I: Nil, II: "<10", III: "10-20", IV: "21-50", V: ">50"}
+    bands:   {I: "=0", II: "(0,10)", III: "[10,20]", IV: "(20,50]", V: "(50,inf)"}
+
+  - id: T7.2-20
+    name: Missing elements
+    unit: No.
+    printed: {I: Nil, II: "<2", III: "2-5", IV: "6-10", V: ">10"}
+    bands:   {I: "=0", II: "(0,2)", III: "[2,5]", IV: "(5,10]", V: "(10,inf)"}
+
+  - id: T7.2-21
+    name: Leaning/bulging
+    unit: mm
+    printed: {I: Nil, II: "<5", III: "5-15", IV: "16-25", V: ">25"}
+    bands:   {I: "=0", II: "(0,5)", III: "[5,15]", IV: "(15,25]", V: "(25,inf)"}
+
+  - id: T7.2-22
+    name: Loose joints
+    unit: No.
+    printed: {I: Nil, II: "<2", III: "3-5", IV: "6-8", V: ">8"}
+    bands:   {I: "=0", II: "(0,2)", III: "[2,5]", IV: "(5,8]", V: "(8,inf)"}
+    note: "A count of 2 is not covered in print; assigned to III (conservative)."
+
+  - id: T7.2-23
+    name: Undesired restraints
+    unit: No.
+    printed: {I: Nil, II: Nil, III: "1", IV: "2-3", V: ">3"}
+    bands:   {I: "=0", II: null, III: "(0,1]", IV: "(1,3]", V: "(3,inf)"}
+
+  - id: T7.2-24
+    name: Marine borers
+    unit: "%"
+    printed: {I: Nil, II: "<10", III: "10-25", IV: "26-50", V: ">50"}
+    bands:   {I: "=0", II: "(0,10)", III: "[10,25]", IV: "(25,50]", V: "(50,inf)"}
+    note: "Printed as 'Marine boars'."
+
+  - id: T7.2-25
+    name: Inadequate drainage spots
+    unit: No.
+    printed: {I: Nil, II: "<2", III: "3-5", IV: "6-8", V: ">8"}
+    bands:   {I: "=0", II: "(0,2)", III: "[2,5]", IV: "(5,8]", V: "(8,inf)"}
+    note: "A count of 2 is not covered in print; assigned to III (conservative)."
+
+  - id: T7.2-26
+    name: Silting
+    unit: "%"
+    printed: {I: Nil, II: "<10", III: "10-25", IV: "26-50", V: ">50"}
+    bands:   {I: "=0", II: "(0,10)", III: "[10,25]", IV: "(25,50]", V: "(50,inf)"}
+
+# Rows that appear only in the Table 7.4 photo plates (decision E11)
+  - id: T7.4-CORR
+    name: Corrosion (depth, pitting excluded)
+    unit: mm
+    source: "Table 7.4 row 12, p.114"
+    printed: {I: "<0.1", II: "0.1-0.3", III: "0.31-0.5", IV: "0.51-1.0", V: ">1"}
+    bands:   {I: "[0,0.1)", II: "[0.1,0.3]", III: "(0.3,0.5]", IV: "(0.5,1.0]", V: "(1.0,inf)"}
+
+  - id: T7.4-TILT
+    name: Tilting
+    unit: gradient            # rise / run; 1 in 100 = 0.01
+    source: "Table 7.4 row 18, p.116"
+    printed: {I: Nil, II: "up to 1 in 100", III: "up to 1 in 75", IV: "up to 1 in 60", V: ">1 in 60"}
+    bands:   {I: "=0", II: "(0,0.01]", III: "(0.01,0.013333]", IV: "(0.013333,0.016667]", V: "(0.016667,inf)"}
+
+# Names used in the book's worked example (Table 7.6) that are not Table 7.2 rows (decision E13).
+# Each maps to the row the engineer should measure against; mapping is a proposal for sign-off.
+aliases:
+  Clogging: T7.2-25            # side drains, expansion joints, drainage spouts
+  Missing: T7.2-20
+  Rusting: T7.2-10
+  Corrosion: T7.4-CORR
+  Crushing/damaged: T7.2-16
+  Staining: T7.2-09
+  Not visible: engineer_judgement   # foundations: rate from stability of the parts above (§7.5.1)

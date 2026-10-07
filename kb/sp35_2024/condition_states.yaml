@@ -1,0 +1,49 @@
+# IRC:SP:35-2024 condition states (Table 5.1, pp. 89-91), reduction coefficients (§7.5, p.130)
+# and BHI star rating (p.132). Descriptions below are short summaries; see Table 5.1 for the full text.
+
+kb_version: sp35_2024-kb0
+status: draft-for-signoff
+
+states:
+  - id: I
+    name: Excellent
+    s_k: 0.0
+    summary: "Sound; only constructional deficiencies; extent nil or insignificant; routine maintenance only."
+  - id: II
+    name: Good
+    s_k: 0.25
+    summary: "More than satisfactory; minor extent, low severity; low-cost regular maintenance; specialised repairs at convenience."
+  - id: III
+    name: Fair
+    s_k: 0.5
+    summary: "Satisfactory but durability reduced; major extent, medium severity; specialised maintenance and repairs needed soon; some monitoring."
+  - id: IV
+    name: Poor
+    s_k: 0.75
+    summary: "Structurally deficient; strength, stability or traffic safety no longer assured; restriction of use may be needed; rehabilitation on a programme basis."
+  - id: V
+    name: Critical
+    s_k: 1.0
+    summary: "Weak; risk of partial or total failure; immediate propping or closure may be required; repair or replacement immediately."
+
+# Eq. 3 contribution of one distress: 100 - 100 * s_k  ->  I 100, II 75, III 50, IV 25, V 0
+
+rules:
+  no_distress_noticed: {cs_j: 100, report_as: "Nil / I"}          # p.131
+  element_absent: {cs_j: 100, report_as: "NA"}                     # p.131
+  foundations_not_visible: engineer_judgement_required             # p.131, from shift/tilt/deformation above
+  other_distress_types: map_with_table_5_1_descriptions            # p.131: types not in Tables 7.2/7.3
+  ndt_results: map_to_same_five_states                             # p.91 and p.131
+  critical_list: any_distress_in_state_V                           # p.130-131, independent of BHI
+  urgent_list: any_distress_in_state_IV
+
+# Star rating — printed bands (p.132): <20 Critical/1; 21-40 Poor/2; 41-60 Fair/3; 61-80 Good/4; 81-100 Excellent/5.
+# Text p.135: BHI "more than 80" -> excellent, five star. Gaps resolved by decision E8.
+star_rating:
+  decision: E8
+  bands:
+    - {stars: 5, condition: Excellent, interval: "(80,100]"}
+    - {stars: 4, condition: Good,      interval: "(60,80]"}
+    - {stars: 3, condition: Fair,      interval: "(40,60]"}
+    - {stars: 2, condition: Poor,      interval: "(20,40]"}
+    - {stars: 1, condition: Critical,  interval: "[0,20]"}

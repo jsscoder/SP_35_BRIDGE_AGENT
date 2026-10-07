@@ -1,0 +1,118 @@
+# SAM 3.1 prompt library v0 — text prompts mapped to SP:35 codes.
+# SAM 3.1 takes short noun phrases; each class lists a primary prompt and synonyms (results are merged).
+# Thresholds and minimum areas are STARTING GUESSES. They are tuned on the RTX 3060 in Phase 2 (WP2.5)
+# and replaced by prompt library v2 with per-class values measured on the held-out bridge.
+# `tile: true` = also run a tiled pass at native resolution (hairline features).
+# `measure` = how the extent is estimated in Phase 1 (see WP1.5); mm/m values need a scale (Phase 2) or gauge entry.
+
+version: v0
+defaults:
+  score_threshold: 0.5
+  min_area_px: 400          # at model input scale
+  merge_iou: 0.6            # merge masks from synonyms / tiles above this IoU
+
+# Pass 1 — components (host masks). Distresses are kept only inside one of these.
+components:
+  - {id: pier,             sp35: C2.7, prompts: ["bridge pier", "concrete pier column", "circular pier"]}
+  - {id: pier_cap,         sp35: C2.8, prompts: ["pier cap", "hammerhead pier cap", "concrete cap beam"]}
+  - {id: abutment,         sp35: C2.1, prompts: ["bridge abutment", "abutment wall"]}
+  - {id: wing_wall,        sp35: C2.5, prompts: ["wing wall"]}
+  - {id: bearing,          sp35: C7.1, prompts: ["bridge bearing", "elastomeric bearing pad", "steel bearing plate"]}
+  - {id: bearing_seat,     sp35: C7.2, prompts: ["bearing pedestal", "bearing seat"]}
+  - {id: girder,           sp35: C5.1, prompts: ["concrete girder", "bridge I-girder", "bridge beam"]}
+  - {id: diaphragm,        sp35: C5.2, prompts: ["cross girder", "diaphragm between girders"]}
+  - {id: deck_soffit,      sp35: C5.4, prompts: ["underside of bridge deck", "deck slab soffit"]}
+  - {id: cantilever_slab,  sp35: C5.5, prompts: ["deck cantilever overhang"]}
+  - {id: expansion_joint,  sp35: C6.3, prompts: ["expansion joint", "deck joint gap"]}
+  - {id: crash_barrier,    sp35: C6.9, prompts: ["crash barrier", "concrete parapet", "bridge railing"]}
+  - {id: drainage_spout,   sp35: C6.8, prompts: ["drainage spout", "drain pipe outlet"]}
+  - {id: wearing_surface,  sp35: C6.1, prompts: ["road surface", "asphalt wearing course", "concrete road surface"]}
+  - {id: footpath,         sp35: C6.2, prompts: ["footpath", "sidewalk"]}
+  - {id: kerb,             sp35: C6.6, prompts: ["kerb", "curb"]}
+  - {id: light_post,       sp35: C6.7, prompts: ["street light pole"]}
+  - {id: approach_wall,    sp35: C1.3, prompts: ["retaining wall beside road", "approach retaining wall"],
+     note: "Flyover approach walls; engineer confirms C1.3 vs C3.4 (river retaining wall)."}
+  - {id: slope_protection, sp35: C1.8, prompts: ["stone pitching on slope", "embankment slope protection"]}
+
+# Pass 2 — distresses. `sp35_row` points at distress_bridge.yaml / distress_approach.yaml.
+distresses:
+  - id: crack
+    sp35_row: T7.2-11
+    prompts: ["crack in concrete", "concrete crack", "hairline crack"]
+    tile: true
+    measure: width_mm_needs_scale
+    suppress_with: [cable, rope, shadow_edge]
+  - id: spalling
+    sp35_row: T7.2-08
+    prompts: ["spalled concrete", "concrete spalling", "broken concrete surface"]
+    measure: area_percent_of_host
+  - id: exposed_reinforcement
+    sp35_row: T7.2-12
+    prompts: ["exposed rebar", "exposed steel reinforcement", "rusted reinforcement bars"]
+    tile: true
+    measure: area_percent_of_host
+    suppress_with: [cable, metal_railing]
+  - id: rust_stain
+    sp35_row: T7.2-10
+    prompts: ["rust stain on concrete", "rust streaks"]
+    measure: area_percent_of_host
+  - id: efflorescence
+    sp35_row: T7.2-15
+    prompts: ["white efflorescence deposits", "white salt deposit on concrete"]
+    measure: area_percent_of_host
+  - id: honeycombing
+    sp35_row: T7.2-06
+    prompts: ["honeycombing in concrete", "porous voids in concrete surface"]
+    tile: true
+    measure: area_percent_of_host
+  - id: leaching_stain
+    sp35_row: T7.2-09
+    prompts: ["water stain on concrete", "leaching stain", "damp patch on concrete"]
+    measure: area_percent_of_host
+  - id: vegetation
+    sp35_row: T7.2-04
+    prompts: ["plant growing on concrete", "vegetation", "weeds"]
+    measure: count_and_area_percent
+  - id: debris_clogging
+    sp35_row: T7.2-25          # alias "Clogging" (E13); engineer confirms
+    prompts: ["debris on pier cap", "soil and rubble heap", "clogged drain"]
+    measure: count
+  - id: crushing
+    sp35_row: T7.2-16
+    prompts: ["crushed concrete edge", "broken bearing pedestal"]
+    measure: area_percent_of_host
+  - id: missing_element
+    sp35_row: T7.2-20
+    prompts: ["missing railing section", "broken railing"]
+    measure: count
+    note: "Low reliability from photos; reviewer confirms."
+  - id: pothole
+    sp35_row: T7.3-10
+    prompts: ["pothole"]
+    measure: count
+  - id: patching
+    sp35_row: T7.3-11
+    prompts: ["patched road surface", "patch repair on road"]
+    measure: area_percent_of_host
+  - id: road_crack
+    sp35_row: T7.3-03          # longitudinal T7.3-02 / transverse T7.3-03 chosen by orientation
+    prompts: ["crack in road surface"]
+    tile: true
+    measure: width_mm_needs_scale
+
+# Not attempted from photos (needs NDT, survey or engineer input):
+not_from_photos:
+  - {sp35_row: T7.2-07, reason: "Delamination: hammer sounding or thermal survey (Phase 6 thermal module)."}
+  - {sp35_row: T7.2-03, reason: "Scour depth: sounding or underwater inspection."}
+  - {sp35_row: T7.2-05, reason: "Deflection/tilt: level or total-station survey; tilt may be estimated with a scale reference later."}
+  - {sp35_row: T7.2-13, reason: "Reduction in rebar area: needs measurement after exposure."}
+
+# Suppression masks: subtracted from distress masks before measuring.
+suppression:
+  cable:          ["electric cable", "wire bundle", "hanging wires"]
+  rope:           ["rope", "string"]
+  metal_railing:  ["metal railing", "steel grille"]
+  shadow_edge:    ["shadow"]
+  poster:         ["poster", "banner", "signboard"]
+  person:         ["person"]          # also blurred in exports
+  vehicle:        ["vehicle", "number plate"]

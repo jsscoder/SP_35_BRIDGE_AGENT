@@ -1,0 +1,23 @@
+# Never commit secrets, weights, photos, or local data.
+.env
+.env.*
+HF_TOKEN*
+*token*.txt
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+data/
+**/pilot_photos/
+**/*.jpg.original
+*.HEIC
+.yugmi_images/
+.vscode/
+.idea/
+__pycache__/
+.venv/
+.uv/
+*.log
+docs/reports/*probe*.md
+!docs/reports/.gitkeep
