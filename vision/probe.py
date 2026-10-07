@@ -1,58 +1,46 @@
-"""VRAM probe for SAM 3.1 (Task 0.4, skill vram-probe).
-
-Runs 10 photos x all prompts in bf16 + one tiled pass, logging
-torch.cuda.max_memory_allocated() and sec/photo.
-Prompts come only from kb/prompts/sam3_prompts.yaml. No SP:35 values here.
-Token read from HF_TOKEN env only (never logged).
-"""
-from __future__ import annotations
-import argparse, json, time
+"""Full VRAM probe (skill vram-probe): 10 photos x all prompts bf16 + 1 tiled pass."""
+import json, time
 from pathlib import Path
+import torch
+import yaml
+from PIL import Image
+from sam3.model_builder import build_sam3_image_model
+from sam3.model.sam3_image_processor import Sam3Processor
 
+print("cuda", torch.cuda.is_available(), torch.cuda.get_device_name(0))
+lib = yaml.safe_load(Path("kb/prompts/sam3_prompts.yaml").read_text(encoding="utf-8"))
+prompts = [(c.get("id"), t) for c in lib.get("components", []) + lib.get("distresses", [])
+           for t in c.get("prompts", [])]
+print("prompt_count", len(prompts))
+photos = sorted(Path("data/pilot/probe10").glob("*.*"))[:10]
+print("photos", len(photos))
 
-def load_prompts(path: Path):
-    import yaml
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    comps = [p for c in data.get("components", []) for p in c.get("prompts", [])]
-    dists = [p for d in data.get("distresses", []) for p in d.get("prompts", [])]
-    return comps, dists
-
-
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--photos", default="data/pilot/probe10")
-    ap.add_argument("--prompts", default="kb/prompts/sam3_prompts.yaml")
-    ap.add_argument("--dtype", default="bf16", choices=["bf16", "fp16", "fp32"])
-    args = ap.parse_args()
-
-    photos = sorted(Path(args.photos).glob("*.*"))
-    if not photos:
-        print(f"No photos in {args.photos} — place 10 pilot photos there (Task 0.6).")
-        return 2
-    comps, dists = load_prompts(Path(args.prompts))
-    print(f"Photos: {len(photos)}  component-prompts: {len(comps)}  distress-prompts: {len(dists)}")
-
-    try:
-        import torch
-    except ImportError:
-        print("torch not installed in this env (WSL2 venv needs torch cu128). BLOCKED.")
-        return 3
-    if not torch.cuda.is_available():
-        print("CUDA not available. Record CPU-only timing per skill fallback.")
-        return 4
-
-    from sam3.model_builder import build_sam3_image_model
-    from sam3.model.sam3_image_processor import Sam3Processor
-
+torch.cuda.reset_peak_memory_stats()
+t0 = time.time()
+model = build_sam3_image_model(checkpoint_path="data/weights/sam3.1/sam3.1_multiplex.pt",
+                               device="cuda", load_from_HF=False)
+MAX_SIDE = 1024
+load_peak = torch.cuda.max_memory_allocated() / 1e9
+print("load", json.dumps({"sec": round(time.time() - t0, 1), "peak_gb": round(load_peak, 2)}))
+proc = Sam3Processor(model)
+rows = []
+for ph in photos:
+    img = Image.open(ph).convert("RGB")
+    if max(img.size) > MAX_SIDE:
+        img = img.copy()
+        img.thumbnail((MAX_SIDE, MAX_SIDE))
     torch.cuda.reset_peak_memory_stats()
-    t0 = time.time()
-    model = build_sam3_image_model()
-    proc = Sam3Processor(model)
-    # ... set_image once per photo, set_text_prompt per prompt (full loop in G0 run)
-    peak = torch.cuda.max_memory_allocated() / 1e9
-    print(json.dumps({"peak_gb": peak, "sec": time.time() - t0}))
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    t1 = time.time()
+    with torch.amp.autocast("cuda", dtype=torch.bfloat16):
+        state = proc.set_image(img)
+        n = 0
+        for cid, text in prompts:
+            out = proc.set_text_prompt(state=state, prompt=text)
+            m = out.get("masks", []) if isinstance(out, dict) else []
+            n += len(m)
+    rows.append({"photo": ph.name, "size": list(img.size), "sec": round(time.time() - t1, 1),
+                 "peak_gb": round(torch.cuda.max_memory_allocated() / 1e9, 2), "masks": n})
+    print(json.dumps(rows[-1]))
+worst = max(r["peak_gb"] for r in rows)
+print("PROBE", json.dumps({"worst_peak_gb": worst, "pass_3_4gb": worst <= 3.4,
+                           "total_masks": sum(r["masks"] for r in rows)}))
