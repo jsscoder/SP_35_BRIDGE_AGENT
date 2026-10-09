@@ -17,14 +17,22 @@ NVIDIA Cosmos 3 Reasoner is added in Phase 3 behind the `Reasoner` contract (Pha
 8. Desk app on the RTX 2050 laptop: peak VRAM ≤ 3.4 GB.
 
 ## Stack
-Python 3.12 · uv · PyTorch 2.7+ (CUDA 12.8 builds) · official `sam3` repo (`build_sam3_image_model`, `Sam3Processor`) with checkpoints from Hugging Face `facebook/sam3.1` · FastAPI · SQLite · pydantic · pytest + hypothesis.
-GPU worker: WSL2 Ubuntu 24.04 on the laptop; Docker (CUDA 12.8) on the RTX 3060 and RTX 5070 Ti.
+Python 3.12 · uv · PyTorch 2.11 (CUDA 12.8 builds) · `sam3` 0.1.4 with the `facebook/sam3.1` checkpoint · FastAPI · SQLite · pydantic · pytest + hypothesis.
+GPU worker on the laptop: native Windows `.venv-win`, pinned in `requirements/vision-win.txt`, built by `tools/setup_vision_env.ps1` (WSL2 is the fallback). Docker (CUDA 12.8) on the RTX 3060 and RTX 5070 Ti.
+Load SAM only through `vision.model.load_model` (bf16 encoders, checkpoint key check, VRAM cap). Never cast the whole model with `.to(bfloat16)`: it breaks the RoPE buffers.
+
+## Everyday commands
+- Tests: `uv run --group dev pytest` · oracle: `uv run --with pyyaml python tools/sp35_reference_check.py`
+- Verification: `uv run --with pyyaml python tools/verify_phase0.py` (add `--strict` at a gate)
+- GPU (from the repo root): `.venv-win\Scripts\python.exe -m vision.probe` · `.venv-win\Scripts\python.exe -m vision.infer --folder <dir> --resume`
+- Pilot set: `uv run --group ingest python -m ingest.build_pilot --src ../yugmi_images`
 
 ## Layout
 - `kb/` — SP:35 knowledge base (YAML, versioned) and SAM 3.1 prompt library
 - `sp35/` — scoring engine (pure Python, no GPU)
-- `vision/` — SAM 3.1 worker
-- `app/` — review app and reports
+- `vision/` — SAM 3.1 worker: `model.py` (loader), `postprocess.py` (rules, CPU-tested), `infer.py`, `probe.py`
+- `ingest/` — pilot-set builder
+- `app/` — review app and reports (not started)
 - `tools/sp35_reference_check.py` — independent oracle for the book's worked examples
 - `docs/plan/` — the plan; read the current phase before starting
 

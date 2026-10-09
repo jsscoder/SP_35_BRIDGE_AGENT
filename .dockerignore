@@ -1,0 +1,34 @@
+# Python caches and local environments
+.venv/
+.venv-win/
+.uv/
+__pycache__/
+.pytest_cache/
+.hypothesis/
+
+# Git and editor files
+.git/
+.github/
+.vscode/
+.idea/
+
+# Local data, photos, reports, and model artifacts
+data/
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.HEIC
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+.env
+.env.*
+HF_TOKEN*
+
+# Documentation and planning material are not required in the runtime image
+docs/
+README.md
+AGENTS.md

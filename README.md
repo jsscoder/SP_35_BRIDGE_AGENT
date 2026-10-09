@@ -43,3 +43,18 @@ Finish by running the sp35-golden-tests skill, then prepare the G0 review with t
 - Accept the SAM License for `facebook/sam3.1` on Hugging Face and create a read token (keep it out of the repo).
 - Sign the interpretations register (bridge engineer).
 - Book GPU days on the company RTX 3060 and RTX 5070 Ti for Phase 2.
+
+## Run it (state after the 8 Oct 2026 audit fixes)
+
+| Task | Command (repo root) |
+|---|---|
+| Rebuild the GPU environment | `.\tools\setup_vision_env.ps1` (add `-Force` to replace an existing `.venv-win`) |
+| Check the environment | `.venv-win\Scripts\python.exe tools\env_check.py --full` |
+| Download the weights | `uv run --with huggingface_hub python tools/fetch_weights.py` (needs `HF_TOKEN` set in the shell) |
+| Build the pilot set | `uv run --group ingest python -m ingest.build_pilot --src ../yugmi_images` |
+| Memory probe (G0) | `.venv-win\Scripts\python.exe -m vision.probe --photos data/pilot/probe10 --label rtx2050` |
+| Run SAM 3.1 on a folder | `.venv-win\Scripts\python.exe -m vision.infer --folder data/pilot/probe10 --resume` (add `--tile` for native-resolution cracks and rebar) |
+| Tests | `uv run --group dev pytest` |
+| Phase 0 verification | `uv run --with pyyaml python tools/verify_phase0.py` (`--strict` at the gate) |
+
+What exists now: the SP:35 Chapter 7 engine (`sp35/`), the SAM 3.1 loader, inferencer and probe (`vision/`), the pilot builder (`ingest/`), and their tests. Not started: the review app and reports (`app/`, WP1.6–1.7).

@@ -118,12 +118,12 @@ GPU days needed: Phase 2 → RTX 3060 × 3 days, RTX 5070 Ti × 2 days (December
 
 Goal: prove the model fits on the laptop and lock the reading of SP:35 before building on either.
 
-- [ ] **0.1 Repository.** Create the repo from this pack; private remote; CI runs `tools/sp35_reference_check.py` and `pytest`.
-- [ ] **0.2 Model access.** The account holder accepts the SAM License for `facebook/sam3.1` on Hugging Face and creates a read token; store it as `HF_TOKEN` outside the repo.
-- [ ] **0.3 Runtime.** Try native Windows for at most half a day; otherwise use WSL2 Ubuntu 24.04 (recommended by SAM 3; native Windows has Triton issues). Python 3.12, PyTorch ≥ 2.7 for CUDA 12.8. Write `docs/reports/runtime_decision.md`.
-- [ ] **0.4 Memory probe.** Run the `vram-probe` skill: 10 photos × all prompts in bf16 plus one tiled pass. Pass: peak allocated ≤ 3.4 GB, no out-of-memory error. Fallbacks in order: smaller input → sequential prompts with cache clearing → text encoder on CPU → CPU-only timing → remote worker on the 3060.
-- [ ] **0.5 Interpretations.** One-hour session; the bridge engineer signs `docs/plan/SP35_CH7_INTERPRETATIONS.md` (E1–E14) and the bands in `kb/sp35_2024/distress_*.yaml`. Set `status: signed` in the KB files.
-- [ ] **0.6 Pilot set.** Dedupe the demo set (383 files → 167 distinct flyover photos), exclude non-bridge frames (2 DJI M3T thermal frames of a non-bridge site, 1 Windows screenshot), tag span and component in `data/pilot/tags.csv`.
+- [ ] **0.1 Repository.** Create the repo from this pack; private remote; CI runs `tools/sp35_reference_check.py` and `pytest`. _(8 Oct: repo and CI workflow done, CI green in a simulated fresh checkout; **open: private remote** — CI has never run.)_
+- [ ] **0.2 Model access.** The account holder accepts the SAM License for `facebook/sam3.1` on Hugging Face and creates a read token; store it as `HF_TOKEN` outside the repo. _(8 Oct: gated access works; **open: rotate the token** that was exposed in chat, audit A1.)_
+- [x] **0.3 Runtime.** Try native Windows for at most half a day; otherwise use WSL2 Ubuntu 24.04 (recommended by SAM 3; native Windows has Triton issues). Python 3.12, PyTorch ≥ 2.7 for CUDA 12.8. Write `docs/reports/runtime_decision.md`. _(evidence: `docs/reports/runtime_decision.md` — native Windows standard, WSL2 fallback; env pinned in `requirements/vision-win.txt`.)_
+- [x] **0.4 Memory probe.** Run the `vram-probe` skill: 10 photos × all prompts in bf16 plus one tiled pass. Pass: peak allocated ≤ 3.4 GB, no out-of-memory error. Fallbacks in order: smaller input → sequential prompts with cache clearing → text encoder on CPU → CPU-only timing → remote worker on the 3060. _(evidence: `docs/reports/vram_probe_rtx2050_2026-10-08.md` — PASS, peak 2.57 GB, no spill, tiled pass included.)_
+- [ ] **0.5 Interpretations.** One-hour session; the bridge engineer signs `docs/plan/SP35_CH7_INTERPRETATIONS.md` (E1–E14) and the bands in `kb/sp35_2024/distress_*.yaml`. Set `status: signed` in the KB files. _(open: needs the bridge engineer; `tools/verify_phase0.py --strict` fails until signed.)_
+- [x] **0.6 Pilot set.** Dedupe the demo set (383 files → 167 distinct flyover photos), exclude non-bridge frames (2 DJI M3T thermal frames of a non-bridge site, 1 Windows screenshot), tag span and component in `data/pilot/tags.csv`. _(evidence: `ingest/build_pilot.py`; `data/pilot/manifest.csv` 383 → 167, every exclusion reasoned; span/support tagging moved to WP1.3 with the engineer, probe photos carry SP:35 hints.)_
 
 **G0 acceptance:** probe report with numbers; runtime decision; signed register; pilot set ready.
 
@@ -137,32 +137,32 @@ In scope: still photos (JPG, HEIC, PNG, drone RGB); one bridge at a time; Table 
 Out of scope: reasoner (Phase 3), automatic mm from scale cards (Phase 2), fine-tuning (Phase 4), multi-bridge ranking UI (Phase 5), video/thermal/installer/multi-user (Phase 6).
 
 ### WP1.1 SP:35 knowledge base (W2, CPU)
-- [ ] Load `kb/sp35_2024/*.yaml` into pydantic models; validate at start-up (weights present, every row has printed I–V, intervals parse, no gaps or overlaps, aliases resolve).
-- [ ] Keep `printed` text beside machine bands; expose `explain(row, value)` returning e.g. "Table 7.2 row 11 (Cracking, mm): 0.6 in (0.3,1.0] → III".
-- [ ] Include extra rows T7.4-CORR, T7.4-TILT and the alias map (E11, E13).
-- [ ] KB version hash (sha256 of the YAML files) stamped on every assessment and report.
+- [x] Load `kb/sp35_2024/*.yaml` into pydantic models; validate at start-up (weights present, every row has printed I–V, intervals parse, no gaps or overlaps, aliases resolve). _(evidence: `sp35/kb.py`, `tests/unit/test_engine.py`.)_
+- [x] Keep `printed` text beside machine bands; expose `explain(row, value)` returning e.g. "Table 7.2 row 11 (Cracking, mm): 0.6 in (0.3,1.0] → III". _(as `condition_state(...).explanation`.)_
+- [x] Include extra rows T7.4-CORR, T7.4-TILT and the alias map (E11, E13).
+- [ ] KB version hash (sha256 of the YAML files) stamped on every assessment and report. _(hash done — `KnowledgeBase.version_hash`, line-ending independent, on `BridgeAssessment`; reports come with WP1.7.)_
 - **Done when:** schema tests pass and the signed register is committed.
 
 ### WP1.2 Scoring engine (W2, CPU, deterministic)
-- [ ] `condition_state(row, value | values)`; dual-criteria rows take the worse state; `null` bands never match.
-- [ ] Eq. 3 (`cs_j`), Eq. 2 (`ci_i`), Eq. 1 (`bhi_span`), span model per `components.yaml` `span_model` (E14), bridge BHI = min over spans, star band (E8), critical list (state V) and urgent list (state IV).
-- [ ] Eq. 4–5 (`mpi`) with Table 7.8 classes from `mpi.yaml`; F7 from BHI via star bands by default (E9), overridable.
-- [ ] Tests: golden cases from `golden_examples.yaml`; property tests (hypothesis): BHI within [0,100]; a worse state never raises CS/CI/BHI; adding an NA element never lowers BHI; bridge BHI equals min span BHI.
+- [x] `condition_state(row, value | values)`; dual-criteria rows take the worse state; `null` bands never match. _(evidence: `sp35/condition.py`.)_
+- [x] Eq. 3 (`cs_j`), Eq. 2 (`ci_i`), Eq. 1 (`bhi_span`), span model per `components.yaml` `span_model` (E14), bridge BHI = min over spans, star band (E8), critical list (state V) and urgent list (state IV). _(evidence: `sp35/scores.py` — `assess`, `assess_bridge`.)_
+- [x] Eq. 4–5 (`mpi`) with Table 7.8 classes from `mpi.yaml`; F7 from BHI via star bands by default (E9), overridable. _(evidence: `sp35/mpi.py`.)_
+- [x] Tests: golden cases from `golden_examples.yaml`; property tests (hypothesis): BHI within [0,100]; a worse state never raises CS/CI/BHI; adding an NA element never lowers BHI; bridge BHI equals min span BHI. _(evidence: `tests/golden`, `tests/property` — 69 tests pass.)_
 - **Done when:** all tests pass in CI on each commit, and `tools/sp35_reference_check.py` agrees with the engine.
 
 ### WP1.3 Ingest and organise (W2–W3, CPU)
-- [ ] Folder scan; SHA-256 + perceptual hash (dHash 16×16, Hamming ≤ 20/256) to drop HEIC-conversion twins and resaved `_1` copies; keep the earliest original.
-- [ ] EXIF (camera, time, GPS if any) and DJI XMP (`drone-dji:` GPS, RelativeAltitude, Gimbal*Degree, LRFTargetDistance); orientation fix; thumbnails.
+- [x] Folder scan; SHA-256 + perceptual hash (dHash 16×16, Hamming ≤ 20/256) to drop HEIC-conversion twins and resaved `_1` copies; keep the earliest original. _(evidence: `ingest/build_pilot.py`.)_
+- [ ] EXIF (camera, time, GPS if any) and DJI XMP (`drone-dji:` GPS, RelativeAltitude, Gimbal*Degree, LRFTargetDistance); orientation fix; thumbnails. _(partial: camera, time, GPS flag, DJI ImageSource and orientation done; full XMP fields and thumbnails open.)_
 - [ ] Span/support/component tagging: folders `S01/`, `S02/`, `P01/`, `A1/`… or bulk tagging in the app; stored in SQLite.
 - [ ] Face and number-plate blur for every exported image (detector on CPU is fine).
 - **Done when:** the Patna folder ingests to 167 distinct photos with no manual cleanup, and excluded files list a reason.
 
 ### WP1.4 SAM 3.1 inferencer (W3–W5, RTX 2050)
-- [ ] `vision/worker.py` FastAPI service; model loaded once; bf16 autocast; `set_image` once per photo; `set_text_prompt` per prompt from `kb/prompts/sam3_prompts.yaml`.
-- [ ] Pass 1 components → host masks; pass 2 distresses → keep masks inside a host; subtract suppression masks (cables, ropes, posters, people, vehicles); merge synonym and tile results (IoU ≥ 0.6).
-- [ ] Optional tiled pass at native resolution (20% overlap) for `tile: true` classes on selected photos.
-- [ ] COCO-RLE + overlay PNG per photo; resumable JSONL job manifest; progress events to the app; OOM guard (empty cache → smaller input → CPU → "needs batch GPU").
-- [ ] Log VRAM peak and seconds per photo per job.
+- [ ] `vision/worker.py` FastAPI service; model loaded once; bf16 autocast; `set_image` once per photo; `set_text_prompt` per prompt from `kb/prompts/sam3_prompts.yaml`. _(partial: `vision/model.py` loads once with bf16 encoders and a VRAM cap, used by the `vision/infer.py` CLI; the FastAPI service is open.)_
+- [x] Pass 1 components → host masks; pass 2 distresses → keep masks inside a host; subtract suppression masks (cables, ropes, posters, people, vehicles); merge synonym and tile results (IoU ≥ 0.6). _(evidence: `vision/postprocess.py`, `tests/unit/test_postprocess.py`.)_
+- [x] Optional tiled pass at native resolution (20% overlap) for `tile: true` classes on selected photos. _(`--tile`.)_
+- [ ] COCO-RLE + overlay PNG per photo; resumable JSONL job manifest; progress events to the app; OOM guard (empty cache → smaller input → CPU → "needs batch GPU"). _(partial: RLE, overlay, resumable JSONL manifest and OOM retry done; app progress events come with WP1.6.)_
+- [x] Log VRAM peak and seconds per photo per job.
 - **Done when:** the pilot set runs end to end on the laptop without a crash; VRAM peak and time per photo are logged against the G0 numbers.
 
 ### WP1.5 Measurement v0 (W4, CPU)

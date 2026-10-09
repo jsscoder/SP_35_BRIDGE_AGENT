@@ -1,0 +1,227 @@
+{
+ "date": "2026-10-08",
+ "label": "rtx2050",
+ "max_side": 1024,
+ "prompt_library": {
+  "version": "v0",
+  "sha12": "87df29bd89fa",
+  "prompts": 87
+ },
+ "model": {
+  "torch": "2.11.0+cu128",
+  "cuda_build": "12.8",
+  "sam3": "0.1.4",
+  "checkpoint": "data\\weights\\sam3.1\\sam3.1_multiplex.pt",
+  "checkpoint_sha256_prefix": "0567debeec80",
+  "dtype": "bf16",
+  "device": "cuda",
+  "gpu": "NVIDIA GeForce RTX 2050",
+  "free_at_start_gib": 3.23,
+  "total_gib": 4.0,
+  "cap_gib": 3.04,
+  "alloc_after_load_gib": 1.75,
+  "load_sec": 15.3,
+  "bf16_params_m": 799.7,
+  "missing_keys": 4,
+  "unused_tracker_keys": 36,
+  "params_m": 840.5
+ },
+ "photos": [
+  {
+   "photo": "IMG_4160.jpg",
+   "native": [
+    4284,
+    5712
+   ],
+   "processed": [
+    768,
+    1024
+   ],
+   "masks": 23,
+   "oom": false,
+   "sec": 18.4,
+   "sec_per_prompt": 0.212,
+   "peak_alloc_gb": 2.52,
+   "peak_reserved_gb": 2.76
+  },
+  {
+   "photo": "IMG_4168.jpg",
+   "native": [
+    5712,
+    4284
+   ],
+   "processed": [
+    1024,
+    768
+   ],
+   "masks": 29,
+   "oom": false,
+   "sec": 16.5,
+   "sec_per_prompt": 0.189,
+   "peak_alloc_gb": 2.54,
+   "peak_reserved_gb": 2.89
+  },
+  {
+   "photo": "IMG_4185.jpg",
+   "native": [
+    5712,
+    4284
+   ],
+   "processed": [
+    1024,
+    768
+   ],
+   "masks": 28,
+   "oom": false,
+   "sec": 17.1,
+   "sec_per_prompt": 0.196,
+   "peak_alloc_gb": 2.52,
+   "peak_reserved_gb": 2.8
+  },
+  {
+   "photo": "IMG_4195.jpg",
+   "native": [
+    5712,
+    4284
+   ],
+   "processed": [
+    1024,
+    768
+   ],
+   "masks": 24,
+   "oom": false,
+   "sec": 16.1,
+   "sec_per_prompt": 0.186,
+   "peak_alloc_gb": 2.51,
+   "peak_reserved_gb": 2.8
+  },
+  {
+   "photo": "IMG_4227.jpg",
+   "native": [
+    3024,
+    4032
+   ],
+   "processed": [
+    768,
+    1024
+   ],
+   "masks": 13,
+   "oom": false,
+   "sec": 16.3,
+   "sec_per_prompt": 0.187,
+   "peak_alloc_gb": 2.49,
+   "peak_reserved_gb": 2.8
+  },
+  {
+   "photo": "IMG_4231.jpg",
+   "native": [
+    3024,
+    4032
+   ],
+   "processed": [
+    768,
+    1024
+   ],
+   "masks": 17,
+   "oom": false,
+   "sec": 16.4,
+   "sec_per_prompt": 0.189,
+   "peak_alloc_gb": 2.5,
+   "peak_reserved_gb": 2.8
+  },
+  {
+   "photo": "IMG_4238.jpg",
+   "native": [
+    4284,
+    5712
+   ],
+   "processed": [
+    768,
+    1024
+   ],
+   "masks": 14,
+   "oom": false,
+   "sec": 17.1,
+   "sec_per_prompt": 0.197,
+   "peak_alloc_gb": 2.52,
+   "peak_reserved_gb": 2.8
+  },
+  {
+   "photo": "IMG_4241.jpg",
+   "native": [
+    3024,
+    4032
+   ],
+   "processed": [
+    768,
+    1024
+   ],
+   "masks": 13,
+   "oom": false,
+   "sec": 16.6,
+   "sec_per_prompt": 0.191,
+   "peak_alloc_gb": 2.51,
+   "peak_reserved_gb": 2.8
+  },
+  {
+   "photo": "IMG_4290.jpg",
+   "native": [
+    3024,
+    4032
+   ],
+   "processed": [
+    768,
+    1024
+   ],
+   "masks": 52,
+   "oom": false,
+   "sec": 16.5,
+   "sec_per_prompt": 0.189,
+   "peak_alloc_gb": 2.55,
+   "peak_reserved_gb": 2.89
+  },
+  {
+   "photo": "IMG_4297.jpg",
+   "native": [
+    3024,
+    4032
+   ],
+   "processed": [
+    768,
+    1024
+   ],
+   "masks": 20,
+   "oom": false,
+   "sec": 16.1,
+   "sec_per_prompt": 0.186,
+   "peak_alloc_gb": 2.5,
+   "peak_reserved_gb": 2.8
+  }
+ ],
+ "tiled_pass": {
+  "photo": "IMG_4231.jpg",
+  "native": [
+   3024,
+   4032
+  ],
+  "tiles": 20,
+  "tile_size": 1008,
+  "prompts": 9,
+  "masks": 97,
+  "oom": false,
+  "sec": 47.6,
+  "peak_alloc_gb": 2.57,
+  "peak_reserved_gb": 2.88
+ },
+ "verdict": {
+  "budget_gb": 3.4,
+  "worst_peak_alloc_gb": 2.57,
+  "worst_peak_reserved_gb": 2.89,
+  "free_at_start_gb": 3.47,
+  "within_budget": true,
+  "no_oom": true,
+  "no_shared_memory_spill": true,
+  "median_sec_per_photo": 16.5,
+  "pass_3_4gb": true
+ }
+}

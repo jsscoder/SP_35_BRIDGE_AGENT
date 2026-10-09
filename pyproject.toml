@@ -8,11 +8,20 @@ dependencies = [
   "pydantic>=2",
 ]
 
+# The GPU worker (torch cu128, sam3, triton-windows) lives in .venv-win and is
+# pinned in requirements/vision-win.txt; build it with tools/setup_vision_env.ps1.
 [dependency-groups]
 dev = [
   "pytest>=8",
   "hypothesis>=6",
+  "numpy>=1.26",
+  "pillow>=10",
+]
+ingest = [
+  "pillow>=10",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"

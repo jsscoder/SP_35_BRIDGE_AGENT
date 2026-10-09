@@ -13,11 +13,16 @@ data/
 **/*.jpg.original
 *.HEIC
 .yugmi_images/
+
+# environments and tool caches
+.venv/
+.venv-win/
+.uv/
+__pycache__/
+.pytest_cache/
+.hypothesis/
 .vscode/
 .idea/
-__pycache__/
-.venv/
-.uv/
 *.log
-docs/reports/*probe*.md
-!docs/reports/.gitkeep
+
+# Probe reports in docs/reports/ ARE tracked: they are gate evidence (audit A3).
