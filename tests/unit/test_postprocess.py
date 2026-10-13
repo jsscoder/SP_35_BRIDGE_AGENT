@@ -29,7 +29,7 @@ def test_library_maps_every_class_to_sp35():
     """Audit A4: distresses carry their Table 7.2/7.3 row, components their C-code."""
     assert all(c.sp35_ref and c.sp35_ref.startswith("T7.") for c in LIB.of_kind("distress"))
     assert all(c.sp35_ref and c.sp35_ref.startswith("C") for c in LIB.of_kind("component"))
-    assert len(LIB.prompt_list()) == 87          # 41 component + 32 distress + 14 suppression prompts
+    assert len(LIB.prompt_list()) == 93          # 47 component + 32 distress + 14 suppression prompts
     assert LIB.by_id("spalling").sp35_ref == "T7.2-08"
 
 
@@ -58,12 +58,13 @@ def test_whole_component_redetection_is_rejected():
 
 
 def test_distress_outside_components_is_rejected():
-    res = postprocess([det("pier", box(0, 0, 30, 100)), det("crack", box(60, 10, 90, 20))], LIB)
+    """(leaching_stain has no orphan rescue; crack/spalling/rebar are tested below)"""
+    res = postprocess([det("pier", box(0, 0, 30, 100)), det("leaching_stain", box(60, 10, 90, 20))], LIB)
     assert res.distresses == [] and "inside any component" in res.rejected[0].reject_reason
 
 
 def test_no_component_means_no_distress():
-    res = postprocess([det("crack", box(60, 10, 90, 20))], LIB)
+    res = postprocess([det("leaching_stain", box(60, 10, 90, 20))], LIB)
     assert res.distresses == [] and "no component" in res.rejected[0].reject_reason
 
 
@@ -109,8 +110,12 @@ def test_photo_tag_stands_in_for_an_undetected_component():
     assert res.distresses[0].host["source"] == "photo tag (component not detected)"
     # but not when the tagged component *was* detected and the distress lies outside it
     soffit = det("deck_soffit", box(0, 60, 100, 80))
-    res = postprocess([barrier, soffit, det("spalling", box(10, 10, 40, 40))], LIB, photo_host=("deck_soffit", "C5.4"))
+    res = postprocess([barrier, soffit, det("efflorescence", box(10, 10, 40, 40))], LIB,
+                      photo_host=("deck_soffit", "C5.4"))
     assert res.distresses == []
+    # a confident spall there is kept for the engineer to place, never hosted by the tag
+    res = postprocess([barrier, soffit, det("spalling", box(10, 10, 40, 40))], LIB, photo_host=("deck_soffit", "C5.4"))
+    assert res.distresses[0].host["source"] == "orphan_rescue" and res.distresses[0].review_required
 
 
 def test_photo_tag_does_not_accept_frame_filling_masks():
@@ -144,7 +149,7 @@ def _scene():
     res = postprocess([det("pier", box(0, 0, 60, 100)),
                        det("spalling", box(10, 10, 30, 30), 0.8, "spalled concrete"),
                        det("cable", box(0, 50, 100, 52)),
-                       det("crack", box(70, 10, 90, 20))], LIB)
+                       det("leaching_stain", box(70, 10, 90, 20))], LIB)
     assert res.counts() == {"components": 1, "distresses": 1, "suppressors": 1, "rejected": 1}
     return res
 
@@ -166,7 +171,7 @@ def test_overlay_boxes_components_and_distresses_distinctly():
 def test_overlay_does_not_draw_suppressors_or_rejected():
     px = render_overlay(Image.new("RGB", (W, H), GRAY), _scene()).load()
     assert px[399, 204] == px[300, 200] == GRAY      # cable [0, 200, 400, 208], right of the pier
-    assert px[280, 60] == px[300, 40] == px[359, 60] == GRAY   # rejected crack [280, 40, 360, 80]
+    assert px[280, 60] == px[300, 40] == px[359, 60] == GRAY   # rejected stain [280, 40, 360, 80]
 
 
 def test_rendering_leaves_inference_json_unchanged():
@@ -191,3 +196,122 @@ def test_rendering_leaves_inference_json_unchanged():
                                           ((0, 0, 10, 10), (0, 0, 10, 5), 0.5)])
 def test_mask_iou(a, b, expected):
     assert mask_iou(box(*a), box(*b)) == pytest.approx(expected)
+
+
+# ---------------------------------------------------------------- prompt library v1 rules
+def test_component_conflict_prefers_substructure_on_a_tagged_photo():
+    """IMG_4227: the block under a pier was a crash_barrier; on a substructure photo the pier cap wins."""
+    cap = det("pier_cap", box(10, 50, 90, 70), 0.70)
+    barrier = det("crash_barrier", box(10, 50, 90, 71), 0.78)   # higher, but within the 0.15 margin
+    spall = det("spalling", box(30, 55, 40, 65), 0.8)
+    res = postprocess([cap, barrier, spall], LIB, photo_host=("pier", "C2.7"))
+    assert [c.cls.id for c in res.components] == ["pier_cap"]
+    assert "component conflict, photo tag group" in barrier.reject_reason
+    assert res.distresses[0].host["class"] == "pier_cap" and res.distresses[0].host["sp35"] == "C2.8"
+
+
+def test_component_conflict_without_a_tag_uses_structural_priority():
+    girder = det("girder", box(0, 0, 100, 30), 0.70)
+    barrier = det("crash_barrier", box(0, 0, 100, 32), 0.75)
+    res = postprocess([girder, barrier], LIB)
+    assert [c.cls.id for c in res.components] == ["girder"]
+    assert "structural priority" in barrier.reject_reason
+
+
+def test_component_conflict_clear_score_gap_decides_without_a_tag():
+    girder = det("girder", box(0, 0, 100, 30), 0.70)
+    barrier = det("crash_barrier", box(0, 0, 100, 32), 0.95)   # gap 0.25 > 0.15
+    res = postprocess([girder, barrier], LIB)
+    assert [c.cls.id for c in res.components] == ["crash_barrier"]
+    assert "higher score" in girder.reject_reason
+
+
+def test_photo_tag_beats_a_score_gap():
+    """IMG_4195 (tagged pier): a 0.84 "crash barrier" must not take the 0.57 pier's region."""
+    pier = det("pier", box(10, 20, 90, 70), 0.57)
+    barrier = det("crash_barrier", box(10, 20, 90, 72), 0.84)
+    res = postprocess([pier, barrier], LIB, photo_host=("pier", "C2.7"))
+    assert [c.cls.id for c in res.components] == ["pier"]
+    assert "component conflict, photo tag" in barrier.reject_reason
+
+
+def test_components_that_do_not_overlap_are_both_kept():
+    res = postprocess([det("pier", box(0, 0, 30, 100)), det("crash_barrier", box(40, 0, 100, 20), 0.9)], LIB)
+    assert sorted(c.cls.id for c in res.components) == ["crash_barrier", "pier"]
+
+
+def test_confident_unhosted_crack_is_rescued_for_review():
+    res = postprocess([det("crack", box(60, 10, 90, 20), 0.6)], LIB)
+    (crack,) = res.distresses
+    assert crack.host == {"class": "unassigned_structural", "sp35": None, "source": "orphan_rescue",
+                          "inside_fraction": 0.0}
+    r = record(crack)
+    assert r["review_required"] is True and "engineer assigns the component" in r["review_note"]
+    assert r["sp35"] == "T7.2-11"                    # the distress row is still the KB row
+
+
+def test_rescue_needs_confidence_an_eligible_class_and_a_real_defect():
+    weak = det("crack", box(60, 10, 90, 20), 0.45)                       # below orphan_rescue_min 0.5
+    stain = det("leaching_stain", box(10, 10, 40, 20), 0.9)              # class has no rescue
+    res = postprocess([weak, stain], LIB)
+    assert res.distresses == [] and len(res.rejected) == 2
+    whole = postprocess([det("spalling", box(0, 0, 100, 95), 0.9)], LIB)   # fills the frame
+    assert whole.distresses == []
+    pier = det("pier_cap", box(0, 0, 100, 60))
+    cable = det("cable", box(0, 20, 100, 24))
+    under_cable = det("crack", box(5, 70, 95, 73), 0.9)                 # outside the cap ...
+    cable2 = det("cable", box(0, 69, 100, 74))                          # ... and under a cable
+    res = postprocess([pier, cable, cable2, under_cable], LIB)
+    assert res.distresses == [] and "covered by cable" in under_cable.reject_reason
+
+
+def test_per_class_thresholds_and_minimum_areas():
+    pier = det("pier", box(0, 0, 100, 100))
+
+    def small(n):
+        m = np.zeros((H, W), bool)
+        m[100:110, 100:100 + n // 10] = True
+        return m
+
+    res = postprocess([pier, det("crack", small(160), 0.36), det("spalling", box(10, 10, 30, 30), 0.44),
+                       det("crash_barrier", box(0, 80, 100, 100), 0.58)], LIB)
+    assert [d.cls.id for d in res.distresses] == ["crack"]               # 0.36 >= 0.35, 160 px >= 150
+    reasons = {d.cls.id: d.reject_reason for d in res.rejected}
+    assert "below class threshold 0.45" in reasons["spalling"]
+    assert "below class threshold 0.60" in reasons["crash_barrier"]
+    res = postprocess([pier, det("crack", small(140), 0.9)], LIB)
+    assert "below minimum 150" in res.rejected[0].reject_reason
+    assert LIB.min_threshold == 0.35                                     # SAM's floor = lowest class threshold
+
+
+def test_co_occurring_distresses_share_a_region():
+    pier = det("pier", box(0, 0, 100, 100))
+    crack = det("crack", box(20, 20, 60, 30), 0.8)
+    stain = det("leaching_stain", box(20, 20, 60, 30), 0.7)
+    res = postprocess([pier, crack, stain], LIB)
+    assert [d.cls.id for d in res.distresses] == ["crack", "leaching_stain"]
+    assert not crack.review_required and stain.review_required
+    assert "shares its region with crack" in stain.review_note
+
+
+def test_library_rejects_bad_v1_settings(tmp_path):
+    text = (Path(__file__).resolve().parents[2] / "kb/prompts/sam3_prompts.yaml").read_text(encoding="utf-8")
+    for old, new, msg in [("  - [crack, leaching_stain]", "  - [crack, pier]", "co_occur"),
+                          ("component_group_rank: {C2: 0,", "component_group_rank: {C2.7: 0,", "component_group_rank"),
+                          ("score_threshold: 0.5, prompts: [\"bridge pier\"",
+                           "score_threshold: 0.5, orphan_rescue_min: 0.5, prompts: [\"bridge pier\"", "distresses only")]:
+        assert old in text
+        bad = tmp_path / "bad.yaml"
+        bad.write_text(text.replace(old, new), encoding="utf-8")
+        with pytest.raises(ValueError, match=msg):
+            load_prompt_library(bad)
+
+
+def test_several_component_conflicts_in_one_photo():
+    """IMG_4190/4253/4277 crashed: removing a loser compared Detection masks with ==."""
+    a = det("girder", box(0, 0, 100, 30), 0.90)
+    b = det("crash_barrier", box(0, 0, 100, 31), 0.70)
+    c = det("pier", box(0, 50, 40, 100), 0.60)
+    e = det("pier_cap", box(0, 50, 40, 101), 0.95)
+    res = postprocess([a, b, c, e], LIB)
+    assert sorted(x.cls.id for x in res.components) == ["girder", "pier_cap"]

@@ -7,9 +7,14 @@ Rules (vision-gpu.md, audit A4/A5):
 - synonyms of one class that find the same region are merged;
 - suppression masks (cables, ropes, posters, people, vehicles + per-class extras)
   are subtracted from distresses; a distress mostly covered by them is rejected;
+- two component classes on the same region keep one: a clear score gap
+  decides, else the photo's tag, else `component_group_rank`;
 - a distress must lie inside a component, and one that re-detects a whole
-  component (IoU above `redetect_iou`) is rejected;
-- two different distress classes on the same region keep the higher score.
+  component (IoU above `redetect_iou`) is rejected; a confident distress of a
+  class with `orphan_rescue_min` whose host SAM missed is kept as
+  `unassigned_structural` with `review_required`;
+- two different distress classes on the same region keep the higher score,
+  except `co_occur` pairs, which are both kept (the lower one for review).
 Rejected detections are kept with a reason, for audit.
 """
 from __future__ import annotations
@@ -19,7 +24,7 @@ import hashlib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, FrozenSet, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import yaml
@@ -27,8 +32,11 @@ import yaml
 GLOBAL_SUPPRESSORS = ("cable", "rope", "poster", "person", "vehicle")
 # Hosts rated with Table 7.3 (approaches / wearing course) rather than Table 7.2.
 WEARING_COURSE_HOSTS = ("C6.1", "C1.5")
+# Host of a rescued distress whose component SAM did not find: no SP:35 code until the engineer assigns one.
+ORPHAN_HOST = "unassigned_structural"
 _COMPONENT_REF = re.compile(r"^C\d\.\d+$")
 _DISTRESS_REF = re.compile(r"^T7\.[234]-[A-Z0-9]+$")
+_GROUP_REF = re.compile(r"^C\d$")
 
 
 @dataclass(frozen=True)
@@ -41,6 +49,7 @@ class PromptClass:
     min_area_px: int
     tile: bool = False
     suppress_with: Tuple[str, ...] = ()
+    orphan_rescue_min: Optional[float] = None   # distresses only
 
 
 @dataclass(frozen=True)
@@ -50,6 +59,8 @@ class Rules:
     redetect_iou: float = 0.8
     suppressed_max: float = 0.5
     cross_class_iou: float = 0.9
+    component_conflict_iou: float = 0.5
+    component_conflict_margin: float = 0.15
 
 
 @dataclass(frozen=True)
@@ -58,6 +69,8 @@ class PromptLibrary:
     classes: Tuple[PromptClass, ...]
     rules: Rules
     sha12: str
+    group_rank: Mapping[str, int] = field(default_factory=dict, compare=False)
+    co_occur: FrozenSet[FrozenSet[str]] = frozenset()
 
     def of_kind(self, kind: str) -> List[PromptClass]:
         return [c for c in self.classes if c.kind == kind]
@@ -83,11 +96,15 @@ def load_prompt_library(path: Path) -> PromptLibrary:
     rules = Rules(**{k: float(d[k]) for k in Rules.__dataclass_fields__ if k in d})
 
     def make(c: dict, kind: str, ref: Optional[str]) -> PromptClass:
+        rescue = c.get("orphan_rescue_min")
+        if rescue is not None and kind != "distress":
+            raise ValueError(f"{c['id']}: orphan_rescue_min applies to distresses only")
         return PromptClass(id=c["id"], kind=kind, prompts=tuple(c["prompts"]), sp35_ref=ref,
                            threshold=float(c.get("score_threshold", thr)),
                            min_area_px=int(c.get("min_area_px", min_area)),
                            tile=bool(c.get("tile", False)),
-                           suppress_with=tuple(c.get("suppress_with", ())))
+                           suppress_with=tuple(c.get("suppress_with", ())),
+                           orphan_rescue_min=None if rescue is None else float(rescue))
 
     classes: List[PromptClass] = []
     for c in y.get("components", []):
@@ -114,8 +131,19 @@ def load_prompt_library(path: Path) -> PromptLibrary:
     missing = set(GLOBAL_SUPPRESSORS) - names
     if missing:
         raise ValueError(f"suppression list lacks {sorted(missing)}")
+    group_rank = {str(k): int(v) for k, v in (y.get("component_group_rank") or {}).items()}
+    bad = [k for k in group_rank if not _GROUP_REF.match(k)]
+    if bad:
+        raise ValueError(f"component_group_rank keys must be SP:35 groups like C2: {bad}")
+    distress_ids = {c.id for c in classes if c.kind == "distress"}
+    co_occur = set()
+    for pair in y.get("co_occur") or []:
+        if len(pair) != 2 or len(set(pair)) != 2 or set(pair) - distress_ids:
+            raise ValueError(f"co_occur pair must name two different distress classes: {pair}")
+        co_occur.add(frozenset(pair))
     sha = hashlib.sha256(raw_bytes.replace(b"\r\n", b"\n")).hexdigest()[:12]
-    return PromptLibrary(version=str(y.get("version", "?")), classes=tuple(classes), rules=rules, sha12=sha)
+    return PromptLibrary(version=str(y.get("version", "?")), classes=tuple(classes), rules=rules, sha12=sha,
+                         group_rank=group_rank, co_occur=frozenset(co_occur))
 
 
 # ------------------------------------------------------------------ detections
@@ -129,6 +157,12 @@ class Detection:
     host: Optional[dict] = None
     reject_reason: Optional[str] = None
     frame: str = "photo"                  # "photo" or "tile"
+    review_required: bool = False         # kept, but the engineer must look (orphan, shared region)
+    review_note: Optional[str] = None
+
+    def flag(self, note: str) -> None:
+        self.review_required = True
+        self.review_note = note if self.review_note is None else f"{self.review_note}; {note}"
 
     def __post_init__(self):
         self.mask = np.asarray(self.mask, dtype=bool)
@@ -192,6 +226,69 @@ def merge_synonyms(dets: Sequence[Detection], iou: float) -> Tuple[List[Detectio
     return kept, merged
 
 
+def _group(code: Optional[str]) -> str:
+    return (code or "").split(".")[0]
+
+
+def _conflict_winner(a: Detection, b: Detection, lib: PromptLibrary,
+                     photo_host: Optional[Tuple[str, str]]) -> Tuple[Detection, str]:
+    """`a` scores at least as high as `b`; both are components on the same region.
+    The photo's tag decides first: in the pilot run "concrete crash barrier" outscored
+    the real pier and bearing seat on pier-tagged IMG_4195 by more than the margin."""
+    if photo_host is not None:
+        tag = photo_host[1]
+        for matches, why in ((lambda c: c.cls.sp35_ref == tag, "photo tag"),
+                             (lambda c: _group(c.cls.sp35_ref) == _group(tag), "photo tag group")):
+            if matches(a) != matches(b):
+                return (a if matches(a) else b), why
+    if a.score - b.score > lib.rules.component_conflict_margin:
+        return a, "higher score"
+    last = max(lib.group_rank.values(), default=0) + 1
+    ra, rb = (lib.group_rank.get(_group(c.cls.sp35_ref), last) for c in (a, b))
+    if ra != rb:
+        return (a if ra < rb else b), "structural priority"
+    return a, "higher score"
+
+
+def resolve_components(components: Sequence[Detection], lib: PromptLibrary,
+                       photo_host: Optional[Tuple[str, str]] = None) -> Tuple[List[Detection], List[Detection]]:
+    """Two different component classes on one region (mask IoU >= component_conflict_iou)
+    are one member: keep one, so a phantom crash barrier cannot claim a pier cap."""
+    kept = sorted(components, key=lambda d: d.score, reverse=True)
+    lost: List[Detection] = []
+    while True:
+        conflict = None
+        for i, a in enumerate(kept):
+            for b in kept[i + 1:]:
+                if a.cls.id != b.cls.id:
+                    iou = det_iou(a, b)
+                    if iou >= lib.rules.component_conflict_iou:
+                        conflict = (a, b, iou)
+                        break
+            if conflict:
+                break
+        if conflict is None:
+            return kept, lost
+        a, b, iou = conflict
+        winner, why = _conflict_winner(a, b, lib, photo_host)
+        loser = b if winner is a else a
+        loser.reject_reason = f"same region as {winner.cls.id} (IoU {iou:.2f}; component conflict, {why})"
+        kept = [k for k in kept if k is not loser]     # by identity: == would compare the numpy masks
+        lost.append(loser)
+
+
+def _rescue_orphan(d: Detection, rules: Rules, why: str, inside: float) -> bool:
+    """Keep a confident distress whose host SAM missed, for the engineer to place,
+    instead of dropping it. A mask filling the frame is the member, not a defect."""
+    floor = d.cls.orphan_rescue_min
+    if floor is None or d.score < floor or d.area / d.mask.size > rules.redetect_iou:
+        return False
+    d.host = {"class": ORPHAN_HOST, "sp35": None, "source": "orphan_rescue",
+              "inside_fraction": round(float(inside), 3)}
+    d.flag(f"{why}: engineer assigns the component")
+    return True
+
+
 @dataclass
 class PostResult:
     components: List[Detection]
@@ -224,7 +321,8 @@ def postprocess(raw: Sequence[Detection], lib: PromptLibrary,
     kept, merged = merge_synonyms(passing, rules.merge_iou)
     rejected += merged
 
-    components = [d for d in kept if d.cls.kind == "component"]
+    components, lost = resolve_components([d for d in kept if d.cls.kind == "component"], lib, photo_host)
+    rejected += lost
     suppressors = [d for d in kept if d.cls.kind == "suppression"]
     distresses = [d for d in kept if d.cls.kind == "distress"]
 
@@ -252,8 +350,11 @@ def postprocess(raw: Sequence[Detection], lib: PromptLibrary,
                 continue
         if comp_union is None:
             if photo_host is None:
-                d.reject_reason = "no component found to host it (and the photo has no component tag)"
-                rejected.append(d)
+                if _rescue_orphan(d, rules, "no component found and the photo has no component tag", 0.0):
+                    surviving.append(d)
+                else:
+                    d.reject_reason = "no component found to host it (and the photo has no component tag)"
+                    rejected.append(d)
             elif _host_by_tag(d, photo_host, rules, "photo tag"):
                 surviving.append(d)
             else:
@@ -263,8 +364,11 @@ def postprocess(raw: Sequence[Detection], lib: PromptLibrary,
         if inside < rules.host_inside_min:
             tagged_missing = photo_host is not None and not any(c.cls.sp35_ref == photo_host[1] for c in components)
             if not tagged_missing:
-                d.reject_reason = f"only {inside:.0%} inside any component"
-                rejected.append(d)
+                if _rescue_orphan(d, rules, f"only {inside:.0%} inside any detected component", inside):
+                    surviving.append(d)
+                else:
+                    d.reject_reason = f"only {inside:.0%} inside any component"
+                    rejected.append(d)
                 continue
             # the tagged component was not detected: the photo frame stands in for it
             if _host_by_tag(d, photo_host, rules, "photo tag (component not detected)"):
@@ -289,12 +393,15 @@ def postprocess(raw: Sequence[Detection], lib: PromptLibrary,
 
     final: List[Detection] = []
     for d in sorted(surviving, key=lambda x: x.score, reverse=True):
-        dup = next((k for k in final if k.cls.id != d.cls.id and det_iou(k, d) >= rules.cross_class_iou), None)
-        if dup is not None:
-            d.reject_reason = f"same region as {dup.cls.id} (higher score)"
+        same = [k for k in final if k.cls.id != d.cls.id and det_iou(k, d) >= rules.cross_class_iou]
+        blocking = [k for k in same if frozenset((k.cls.id, d.cls.id)) not in lib.co_occur]
+        if blocking:
+            d.reject_reason = f"same region as {blocking[0].cls.id} (higher score)"
             rejected.append(d)
-        else:
-            final.append(d)
+            continue
+        if same:
+            d.flag(f"shares its region with {', '.join(k.cls.id for k in same)} (co-occurring distresses)")
+        final.append(d)
     return PostResult(components=components, distresses=final, suppressors=suppressors, rejected=rejected)
 
 
@@ -326,6 +433,9 @@ def record(d: Detection, rle: Optional[dict] = None) -> dict:
         out["host"] = d.host
     if d.reject_reason is not None:
         out["reject_reason"] = d.reject_reason
+    if d.review_required:
+        out["review_required"] = True
+        out["review_note"] = d.review_note
     if rle is not None:
         out["rle"] = rle
     return out
@@ -352,7 +462,8 @@ def render_overlay(image, result: PostResult):
     out = Image.fromarray(arr.clip(0, 255).astype(np.uint8))
     draw = ImageDraw.Draw(out)
     boxes = [(c, False, 1, f"{c.cls.id} {c.cls.sp35_ref}") for c in result.components] + \
-            [(d, True, 2, f"{d.cls.id} {d.cls.sp35_ref} {d.score:.2f}") for d in result.distresses]
+            [(d, True, 2, f"{d.cls.id} {d.cls.sp35_ref} {d.score:.2f}" + (" REVIEW" if d.review_required else ""))
+             for d in result.distresses]
     for det, warm, width, label in boxes:          # distresses last, so they sit on top
         x0, y0, x1, y1 = det.bbox()               # x1, y1 exclusive
         if x1 <= x0 or y1 <= y0:

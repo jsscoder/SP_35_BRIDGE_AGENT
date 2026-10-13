@@ -46,6 +46,7 @@ FROM runtime AS test
 ENV HYPOTHESIS_STORAGE_DIRECTORY=/tmp/hypothesis
 COPY --from=test-builder --chown=app:app /app/.venv /app/.venv
 COPY --from=builder --chown=app:app /app/tests /app/tests
+COPY --from=builder --chown=app:app /app/app/backend /app/app/backend
 COPY --from=builder --chown=app:app /app/pyproject.toml /app/pyproject.toml
 CMD ["/app/.venv/bin/pytest", "-o", "cache_dir=/tmp/pytest-cache"]
 

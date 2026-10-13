@@ -24,5 +24,10 @@ __pycache__/
 .vscode/
 .idea/
 *.log
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+*.tsbuildinfo
 
 # Probe reports in docs/reports/ ARE tracked: they are gate evidence (audit A3).

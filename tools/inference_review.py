@@ -11,7 +11,162 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import yaml
 from PIL import Image, ImageDraw, ImageOps
+
+
+def build_defect_coverage(detection_counts: Counter, knowledge_dir: Path,
+                          prompts_path: Path, source_photo_count: int,
+                          inference_result_photo_count: int,
+                          successful_photo_count: int) -> dict:
+    """Compare observed SAM distress proposals with SP:35 rows and prompt mappings."""
+    catalogs = []
+    for filename in ("distress_bridge.yaml", "distress_approach.yaml"):
+        document = yaml.safe_load((knowledge_dir / filename).read_text(encoding="utf-8"))
+        catalogs.extend(document["distresses"])
+
+    prompt_data = yaml.safe_load(prompts_path.read_text(encoding="utf-8"))
+    prompts_by_row: dict[str, list[str]] = defaultdict(list)
+    for prompt in prompt_data.get("distresses", []):
+        row_id = prompt.get("sp35_row")
+        if row_id:
+            prompts_by_row[row_id].append(prompt["id"])
+
+    known_rows = {row["id"] for row in catalogs}
+    unknown_rows = set(prompts_by_row) - known_rows
+    if unknown_rows:
+        raise ValueError(f"Prompt library references unknown SP:35 distress rows: {sorted(unknown_rows)}")
+
+    not_from_photos = {
+        item["sp35_row"]: item.get("reason", "")
+        for item in prompt_data.get("not_from_photos", [])
+    }
+    mapped_classes: set[str] = set()
+    coverage_rows = []
+    for row in catalogs:
+        row_id = row["id"]
+        prompt_classes = prompts_by_row.get(row_id, [])
+        mapped_classes.update(prompt_classes)
+        proposals = sum(int(detection_counts.get(class_name, 0)) for class_name in prompt_classes)
+        coverage_rows.append({
+            "table": row_id.split("-", 1)[0].removeprefix("T"),
+            "id": row_id,
+            "name": row["name"],
+            "prompt_classes": prompt_classes,
+            "prompted": bool(prompt_classes),
+            "proposal_count": proposals,
+            "observed_in_dataset": proposals > 0,
+            "not_attempted_reason": not_from_photos.get(row_id),
+        })
+
+    by_table: dict[str, dict] = {}
+    for row in coverage_rows:
+        table = row["table"]
+        totals = by_table.setdefault(table, {
+            "catalog_rows": 0,
+            "prompted_rows": 0,
+            "observed_prompted_rows": 0,
+            "proposal_count": 0,
+        })
+        totals["catalog_rows"] += 1
+        totals["prompted_rows"] += int(row["prompted"])
+        totals["observed_prompted_rows"] += int(row["prompted"] and row["observed_in_dataset"])
+        totals["proposal_count"] += row["proposal_count"]
+
+    prompted_rows = sum(row["prompted"] for row in coverage_rows)
+    observed_rows = sum(row["prompted"] and row["observed_in_dataset"] for row in coverage_rows)
+    return {
+        "source": {
+            "bridge_catalog": str(knowledge_dir / "distress_bridge.yaml"),
+            "approach_catalog": str(knowledge_dir / "distress_approach.yaml"),
+            "prompt_library": str(prompts_path),
+        },
+        "dataset": {
+            "source_photos": source_photo_count,
+            "inference_result_photos": inference_result_photo_count,
+            "successful_inference_photos": successful_photo_count,
+        },
+        "catalog_row_count": len(coverage_rows),
+        "catalog_rows_by_table": by_table,
+        "prompted_catalog_rows": prompted_rows,
+        "observed_prompted_rows": observed_rows,
+        "observed_prompted_row_fraction": observed_rows / prompted_rows if prompted_rows else None,
+        "proposal_count": sum(int(count) for count in detection_counts.values()),
+        "proposal_counts_by_class": dict(sorted(detection_counts.items())),
+        "unmapped_proposal_counts": {
+            label: int(count) for label, count in sorted(detection_counts.items())
+            if label not in mapped_classes
+        },
+        "rows": coverage_rows,
+        "interpretation": (
+            "Observed means at least one accepted SAM proposal mapped to this SP:35 row in the dataset. "
+            "This is prompt/category coverage, not the number of true defects present, unique physical defects, "
+            "recall, or accuracy. Counts are accepted proposal masks and may include repeat views of the same defect. "
+            "Ground-truth annotations are required to measure missed defects."
+        ),
+    }
+
+
+def render_defect_coverage_html(coverage: dict) -> str:
+    table_rows = []
+    for row in coverage["rows"]:
+        classes = ", ".join(row["prompt_classes"]) if row["prompt_classes"] else "Not prompted"
+        if row["not_attempted_reason"] and not row["prompted"]:
+            classes += f" — {row['not_attempted_reason']}"
+        outcome = str(row["proposal_count"]) if row["prompted"] else "—"
+        table_rows.append(
+            "<tr>" + "".join(
+                f"<td>{html.escape(str(value))}</td>"
+                for value in (row["table"], row["id"], row["name"], classes, outcome)
+            ) + "</tr>"
+        )
+    table_summary_rows = []
+    for table, counts in sorted(
+        coverage["catalog_rows_by_table"].items(),
+        key=lambda item: tuple(int(part) for part in item[0].split(".")),
+    ):
+        table_summary_rows.append(
+            "<tr>" + "".join(
+                f"<td>{html.escape(str(value))}</td>"
+                for value in (
+                    f"Table {table}",
+                    counts["catalog_rows"],
+                    counts["prompted_rows"],
+                    counts["observed_prompted_rows"],
+                    counts["proposal_count"],
+                )
+            ) + "</tr>"
+        )
+    fraction = coverage["observed_prompted_row_fraction"]
+    observed = (f"{coverage['observed_prompted_rows']} of {coverage['prompted_catalog_rows']} "
+                f"prompted SP:35 rows had proposals ({fraction:.0%})"
+                if fraction is not None else "No SP:35 rows are mapped to image prompts.")
+    unmapped = coverage["unmapped_proposal_counts"]
+    unmapped_html = (
+        "<p>Proposal classes without an SP:35 row mapping: "
+        + html.escape(", ".join(f"{label}: {count}" for label, count in unmapped.items()))
+        + ".</p>"
+        if unmapped else ""
+    )
+    return (
+        "<section><h2>SP:35 defect catalogue vs dataset proposals</h2>"
+        f"<p>SP:35 catalogue rows in Tables 7.2, 7.3 and supplementary Table 7.4: "
+        f"{coverage['catalog_row_count']}. Directly prompted rows: {coverage['prompted_catalog_rows']}; "
+        f"accepted distress proposal masks: {coverage['proposal_count']}. "
+        f"Image folder: {coverage['dataset']['source_photos']} images found; "
+        f"inference output: {coverage['dataset']['inference_result_photos']} photos "
+        f"({coverage['dataset']['successful_inference_photos']} successful). "
+        f"{html.escape(observed)}.</p>"
+        f"<p>{html.escape(coverage['interpretation'])}</p>"
+        f"{unmapped_html}"
+        "<table><thead><tr><th>Catalogue</th><th>Rows</th><th>Prompted rows</th>"
+        "<th>Prompted rows with proposals</th><th>Proposals</th></tr></thead><tbody>"
+        f"{''.join(table_summary_rows)}</tbody></table>"
+        "<details><summary>All SP:35 distress rows and mapped proposal counts</summary>"
+        "<table><thead><tr><th>Table</th><th>SP:35 row</th><th>Defect</th>"
+        "<th>Prompt coverage</th><th>Proposals</th></tr></thead><tbody>"
+        f"{''.join(table_rows)}</tbody></table></details></section>"
+    )
 
 
 def decode_rle(rle: dict) -> np.ndarray:
@@ -257,6 +412,7 @@ def write_report(prediction_dir: Path, image_dir: Path, output_dir: Path,
     report_images = []
     statuses = Counter()
     detection_counts = Counter()
+    distress_detection_counts = Counter()
     totals: dict[str, dict] = defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0, "iou_sum": 0.0, "matched": 0})
     evaluated, successful = 0, 0
     inferred_keys = set()
@@ -302,6 +458,7 @@ def write_report(prediction_dir: Path, image_dir: Path, output_dir: Path,
             if item.get("rle"):
                 preds.append(prediction_record(item, "distress", image.size))
         detection_counts.update(item["class"] for item in preds)
+        distress_detection_counts.update(item["class"] for item in preds if item["kind"] == "distress")
         gts = None
         if ground_truth_path and key in gt_images:
             gt_image = gt_images[key]
@@ -345,10 +502,21 @@ def write_report(prediction_dir: Path, image_dir: Path, output_dir: Path,
                 "matched_mask_iou": result["iou_sum"] / result["matched"] if result["matched"] else None,
             })
 
+    repo_root = Path(__file__).resolve().parents[1]
+    defect_coverage = build_defect_coverage(
+        distress_detection_counts,
+        repo_root / "kb" / "sp35_2024",
+        repo_root / "kb" / "prompts" / "sam3_prompts.yaml",
+        len(image_paths),
+        sum(statuses.values()),
+        successful,
+    )
     summary = {
         "photos_with_successful_inference": successful,
         "inference_status_counts": dict(statuses),
         "detection_counts_by_class": dict(sorted(detection_counts.items())),
+        "distress_proposal_counts_by_class": dict(sorted(distress_detection_counts.items())),
+        "sp35_defect_coverage": defect_coverage,
         "photos_with_ground_truth_match": evaluated,
         "ground_truth_images_without_inference": len(set(gt_images) - inferred_keys),
         "ground_truth_file": str(ground_truth_path) if ground_truth_path else None,
@@ -372,6 +540,7 @@ def write_report(prediction_dir: Path, image_dir: Path, output_dir: Path,
     if detection_counts:
         render_count_chart(detection_counts, output_dir / "detection_counts.png")
         chart_html = '<h2>Detection counts by class</h2><img src="detection_counts.png" alt="Detection counts by class">'
+    defect_coverage_html = render_defect_coverage_html(defect_coverage)
     rows_html = "\n".join(
         (f'<li><a href="{html.escape(row["plot"])}">{html.escape(row["photo"])}</a>: '
          f'{row["prediction_count"]} SAM masks'
@@ -402,7 +571,7 @@ def write_report(prediction_dir: Path, image_dir: Path, output_dir: Path,
                  f"<h1>{title}</h1><p>{html.escape(summary['note'])}</p>"
                  f"<p>{html.escape(summary['plot_note'])}</p>"
                  f"<p>Successful photos: {successful}; statuses: {html.escape(json.dumps(dict(statuses)))}</p>"
-                 f"{chart_html}{metric_html}<h2>Photos</h2><ul>{rows_html}</ul>"
+                 f"{defect_coverage_html}{chart_html}{metric_html}<h2>Photos</h2><ul>{rows_html}</ul>"
                  "</body></html>")
     (output_dir / "index.html").write_text(html_text, encoding="utf-8")
     return summary

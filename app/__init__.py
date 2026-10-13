@@ -1,0 +1,1 @@
+"""Local bridge-inspection application."""

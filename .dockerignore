@@ -5,6 +5,11 @@
 __pycache__/
 .pytest_cache/
 .hypothesis/
+node_modules/
+**/node_modules/
+.next/
+**/.next/
+*.tsbuildinfo
 
 # Git and editor files
 .git/

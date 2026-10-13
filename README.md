@@ -5,6 +5,7 @@ Everything Google Antigravity's agent needs to start building the one-click SAM 
 - Stakeholder plan (diagrams, roadmap, risks): https://claude.ai/artifact/Jnuzxbqd6zDShjnGjfhUR8
 - Agent-ready plan: `docs/plan/IMPLEMENTATION_PLAN.md`
 - Interpretations for the bridge engineer to sign: `docs/plan/SP35_CH7_INTERPRETATIONS.md`
+- Full technical onboarding and project handoff: [docs/KNOWLEDGE_BASE.md](docs/KNOWLEDGE_BASE.md)
 
 ## What's inside
 
@@ -18,6 +19,9 @@ Everything Google Antigravity's agent needs to start building the one-click SAM 
 | `kb/sp35_2024/*.yaml` | Chapter 7 encoded: Table 7.1 weights, Tables 7.2/7.3 bands, condition states and stars, MPI Tables 7.7–7.9, golden examples |
 | `kb/prompts/sam3_prompts.yaml` | SAM 3.1 prompt library v0 mapped to SP:35 codes |
 | `tools/sp35_reference_check.py` | Independent oracle; reproduces the book's worked examples and checks the YAML |
+| `docs/KNOWLEDGE_BASE.md` | Architecture, safety rules, run commands, current evidence, risks, and roadmap for new contributors/agents |
+| `app/backend/` | Local FastAPI upload API, persistent single-worker SAM job queue, and review-report serving |
+| `app/web/` | Next.js upload dashboard, run history, detailed statistics, and embedded plotting reports |
 
 Antigravity's legacy Workflows stop working on 19 Oct 2026, so repeatable procedures are Skills under `.agents/skills/`.
 
@@ -57,4 +61,58 @@ Finish by running the sp35-golden-tests skill, then prepare the G0 review with t
 | Tests | `uv run --group dev pytest` |
 | Phase 0 verification | `uv run --with pyyaml python tools/verify_phase0.py` (`--strict` at the gate) |
 
-What exists now: the SP:35 Chapter 7 engine (`sp35/`), the SAM 3.1 loader, inferencer and probe (`vision/`), the pilot builder (`ingest/`), and their tests. Not started: the review app and reports (`app/`, WP1.6–1.7).
+What exists now: the SP:35 Chapter 7 engine (`sp35/`), the SAM 3.1 loader, inferencer and probe (`vision/`), the pilot builder (`ingest/`), the saved-inference visual review tool (`tools/inference_review.py`), and a local upload/analysis dashboard (`app/`). The engineer decision workflow and formal Appendix IV/V report generation remain open.
+
+## Local inspection dashboard
+
+The Next.js dashboard and FastAPI backend run locally. Uploading images creates a stored run; SAM does **not** start until you select the run and press **Run analysis**. The GPU worker is serialized to one job at a time. Photos and generated reports stay under the ignored `data/app_runs/` directory.
+
+1. Install/update project dependencies and the pinned GPU worker (if not already set up):
+
+   ```powershell
+   uv sync --group dev
+   .\tools\setup_vision_env.ps1
+   ```
+
+2. In terminal 1, from the repository root, start the API:
+
+   ```powershell
+   uv run python -m app.backend
+   ```
+
+3. In terminal 2, start the web UI:
+
+   ```powershell
+   Set-Location .\app\web
+   npm install
+   $env:NEXT_TELEMETRY_DISABLED = "1"
+   npm run dev
+   ```
+
+4. Open `http://127.0.0.1:3000`. The API is at `http://127.0.0.1:8000`; interactive API docs are at `http://127.0.0.1:8000/docs`.
+
+Uploads accept JPG/JPEG and PNG, with per-image, total-size, file-count, and image-dimension limits. Use the optional high-detail tile pass only when appropriate; it increases processing time. Each completed run exposes the plotting-agent HTML report and summary statistics. Without ground-truth annotations, those statistics describe model output and processing—not accuracy or generalization.
+
+To use a different SAM worker Python, set `SP35_WORKER_PYTHON` before starting the API. By default, the backend uses `.venv-win\Scripts\python.exe` when present and otherwise uses its own interpreter. Do not expose the API beyond localhost; this first version is a single-user local workstation tool, not a multi-user or network-hardened service.
+
+The dashboard provides upload, queued inference, run history, processing/detection summaries, and plotting reports. It is not yet the full engineer decision workflow: manual condition-state approval, an audit trail, and formal Appendix IV/V report generation remain future work.
+
+## Visual triage of distress proposals
+
+The `Distress Bifurcation` agent reviews accepted distress masks by distress type only (not component or host) and separates them into `apt`, `misclassified`, and `uncertain`. It leaves `data/pilot/infer_all_v1` unchanged and writes per-proposal review cards and manifests to `data/pilot/infer_all_v1_bifurcated/`. The `uncertain` folder prevents ambiguous masks from being mislabeled as correct or incorrect. These are visual triage labels, not ground-truth accuracy or engineer-confirmed defects.
+
+To prepare cards and the decisions template:
+
+```powershell
+.\.venv-win\Scripts\python.exe -m tools.bifurcate_distress prepare `
+  --predictions "data\pilot\infer_all_v1" `
+  --images "..\yugmi_images" `
+  --outdir "data\pilot\infer_all_v1_bifurcated"
+```
+
+After the agent fills every row of `decisions.csv` with `apt`, `misclassified`, or `uncertain`, plus confidence and a visual rationale, apply the decisions:
+
+```powershell
+.\.venv-win\Scripts\python.exe -m tools.bifurcate_distress apply `
+  --outdir "data\pilot\infer_all_v1_bifurcated"
+```

@@ -1,11 +1,12 @@
 import json
+from collections import Counter
 
 import numpy as np
 import pytest
 from PIL import Image
 
-from tools.inference_review import (BOX_STYLE, decode_rle, mask_iou, match_masks, prediction_record,
-                                    write_report)
+from tools.inference_review import (BOX_STYLE, build_defect_coverage, decode_rle, mask_iou, match_masks,
+                                    prediction_record, render_defect_coverage_html, write_report)
 
 
 def uncompressed_rle(mask):
@@ -29,6 +30,68 @@ def test_decode_uncompressed_coco_rle_round_trip():
 def test_decode_rle_rejects_invalid_counts():
     with pytest.raises(ValueError, match="do not cover"):
         decode_rle({"size": [2, 2], "counts": [3]})
+
+
+def test_defect_coverage_compares_yaml_catalog_to_distress_proposals(tmp_path):
+    knowledge = tmp_path / "kb"
+    knowledge.mkdir()
+    (knowledge / "distress_bridge.yaml").write_text(
+        "table: '7.2'\ndistresses:\n"
+        "  - {id: T7.2-01, name: Erosion}\n"
+        "  - {id: T7.2-02, name: Rust}\n",
+        encoding="utf-8",
+    )
+    (knowledge / "distress_approach.yaml").write_text(
+        "table: '7.3'\ndistresses:\n  - {id: T7.3-01, name: Potholes}\n",
+        encoding="utf-8",
+    )
+    prompts = tmp_path / "prompts.yaml"
+    prompts.write_text(
+        "distresses:\n"
+        "  - {id: erosion, sp35_row: T7.2-01}\n"
+        "  - {id: rust_stain, sp35_row: T7.2-02}\n"
+        "  - {id: pothole, sp35_row: T7.3-01}\n",
+        encoding="utf-8",
+    )
+
+    coverage = build_defect_coverage(
+        Counter({"erosion": 4, "pothole": 2, "unmapped_label": 5}),
+        knowledge,
+        prompts,
+        source_photo_count=12,
+        inference_result_photo_count=11,
+        successful_photo_count=10,
+    )
+
+    assert coverage["dataset"] == {
+        "source_photos": 12,
+        "inference_result_photos": 11,
+        "successful_inference_photos": 10,
+    }
+    assert coverage["catalog_row_count"] == 3
+    assert coverage["prompted_catalog_rows"] == 3
+    assert coverage["observed_prompted_rows"] == 2
+    assert coverage["proposal_count"] == 11
+    assert coverage["unmapped_proposal_counts"] == {"unmapped_label": 5}
+    assert coverage["catalog_rows_by_table"]["7.2"] == {
+        "catalog_rows": 2, "prompted_rows": 2, "observed_prompted_rows": 1, "proposal_count": 4,
+    }
+    html = render_defect_coverage_html(coverage)
+    assert "not the number of true defects present, unique physical defects, recall, or accuracy" in html
+    assert "unmapped_label: 5" in html
+    assert "T7.2-02" in html and "Not prompted" not in html
+
+
+def test_defect_coverage_rejects_prompt_rows_missing_from_catalog(tmp_path):
+    knowledge = tmp_path / "kb"
+    knowledge.mkdir()
+    (knowledge / "distress_bridge.yaml").write_text("distresses: []\n", encoding="utf-8")
+    (knowledge / "distress_approach.yaml").write_text("distresses: []\n", encoding="utf-8")
+    prompts = tmp_path / "prompts.yaml"
+    prompts.write_text("distresses:\n  - {id: unknown, sp35_row: T7.2-99}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unknown SP:35 distress rows"):
+        build_defect_coverage(Counter(), knowledge, prompts, 0, 0, 0)
 
 
 def test_mask_iou_and_one_to_one_matching():

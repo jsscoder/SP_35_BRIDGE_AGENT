@@ -1,30 +1,61 @@
-# SAM 3.1 prompt library v0 — text prompts mapped to SP:35 codes.
+# SAM 3.1 prompt library v1 — text prompts mapped to SP:35 codes.
 # SAM 3.1 takes short noun phrases; each class lists a primary prompt and synonyms (results are merged).
 # Thresholds and minimum areas are STARTING GUESSES. They are tuned on the RTX 3060 in Phase 2 (WP2.5)
 # and replaced by prompt library v2 with per-class values measured on the held-out bridge.
 # `tile: true` = also run a tiled pass at native resolution (hairline features).
 # `measure` = how the extent is estimated in Phase 1 (see WP1.5); mm/m values need a scale (Phase 2) or gauge entry.
+#
+# v1 (12 Oct 2026), from the 167-photo pilot run (data/pilot/infer_all) — no ground truth yet, so these
+# changes are judged by what survives, not by accuracy:
+# - crash_barrier: "concrete parapet" led 83 of 172 barrier masks (walls, girders, piers, the block under a
+#   pier); generic barrier prompts replaced, threshold raised.
+# - pier_cap / girder / bearing_seat / bearing / expansion_joint: more specific prompts; prompts that never
+#   produced a kept mask ("pier cap", "bridge I-girder", "bridge beam") dropped to hold the prompt count.
+# - crack / exposed_reinforcement / spalling: per-class thresholds and minimum areas; `orphan_rescue_min`
+#   keeps a confident detection whose host component SAM missed, flagged for review.
+# - SAM's own confidence floor is the lowest class threshold, so lower-scoring masks of every class now
+#   reach post-processing and are rejected there with a reason (evidence for WP2.5).
 
-version: v0
+version: v1
 defaults:
   score_threshold: 0.5
   min_area_px: 400          # at model input scale
   merge_iou: 0.6            # merge masks from synonyms / tiles above this IoU
+  component_conflict_iou: 0.5      # two component classes on the same region (mask IoU): keep one
+  component_conflict_margin: 0.15  # a score gap above this decides the conflict on its own
+
+# Component conflict inside the margin: the photo's tag decides (same code, then same group); otherwise
+# the lower rank wins — load-bearing members over approaches/waterway over appurtenances (barriers, kerbs).
+# Heuristic from the pilot run; reviewed with labelled data in WP2.5.
+component_group_rank: {C2: 0, C4: 0, C5: 0, C7: 0, C1: 1, C3: 1, C6: 2}
+
+# Distress pairs that may share one region: each is its own Table 7.2/7.3 row (a crack with leaching is
+# rated for both). The lower-scoring one is kept with `review_required`. Other pairs keep the higher score.
+co_occur:
+  - [crack, leaching_stain]
+  - [crack, efflorescence]
+  - [crack, rust_stain]
+  - [leaching_stain, efflorescence]
+  - [leaching_stain, rust_stain]
+  - [spalling, exposed_reinforcement]
+  - [spalling, rust_stain]
 
 # Pass 1 — components (host masks). Distresses are kept only inside one of these.
 components:
-  - {id: pier,             sp35: C2.7, prompts: ["bridge pier", "concrete pier column", "circular pier"]}
-  - {id: pier_cap,         sp35: C2.8, prompts: ["pier cap", "hammerhead pier cap", "concrete cap beam"]}
+  - {id: pier,             sp35: C2.7, score_threshold: 0.5, prompts: ["bridge pier", "concrete pier column", "circular pier"]}
+  - {id: pier_cap,         sp35: C2.8, score_threshold: 0.5, prompts: ["concrete cap beam", "pier cap beam", "hammerhead pier cap"]}
   - {id: abutment,         sp35: C2.1, prompts: ["bridge abutment", "abutment wall"]}
   - {id: wing_wall,        sp35: C2.5, prompts: ["wing wall"]}
-  - {id: bearing,          sp35: C7.1, prompts: ["bridge bearing", "elastomeric bearing pad", "steel bearing plate"]}
-  - {id: bearing_seat,     sp35: C7.2, prompts: ["bearing pedestal", "bearing seat"]}
-  - {id: girder,           sp35: C5.1, prompts: ["concrete girder", "bridge I-girder", "bridge beam"]}
+  - {id: bearing,          sp35: C7.1, prompts: ["bridge bearing", "elastomeric bearing pad", "steel bearing plate",
+                                                "black rubber bearing pad", "neoprene bearing pad"]}
+  - {id: bearing_seat,     sp35: C7.2, prompts: ["bearing pedestal", "concrete bearing seat", "bearing shelf"]}
+  - {id: girder,           sp35: C5.1, prompts: ["concrete girder", "concrete I-girder", "girder bottom flange", "girder web"]}
   - {id: diaphragm,        sp35: C5.2, prompts: ["cross girder", "diaphragm between girders"]}
   - {id: deck_soffit,      sp35: C5.4, prompts: ["underside of bridge deck", "deck slab soffit"]}
   - {id: cantilever_slab,  sp35: C5.5, prompts: ["deck cantilever overhang"]}
-  - {id: expansion_joint,  sp35: C6.3, prompts: ["expansion joint", "deck joint gap"]}
-  - {id: crash_barrier,    sp35: C6.9, prompts: ["crash barrier", "concrete parapet", "bridge railing"]}
+  - {id: expansion_joint,  sp35: C6.3, prompts: ["expansion joint", "deck joint gap", "finger expansion joint"]}
+  - {id: crash_barrier,    sp35: C6.9, score_threshold: 0.6, min_area_px: 2000,
+     prompts: ["concrete crash barrier", "Jersey barrier", "highway safety barrier", "W-beam guardrail"]}
   - {id: drainage_spout,   sp35: C6.8, prompts: ["drainage spout", "drain pipe outlet"]}
   - {id: wearing_surface,  sp35: C6.1, prompts: ["road surface", "asphalt wearing course", "concrete road surface"]}
   - {id: footpath,         sp35: C6.2, prompts: ["footpath", "sidewalk"]}
@@ -42,16 +73,27 @@ distresses:
     tile: true
     measure: width_mm_needs_scale
     suppress_with: [cable, rope, shadow_edge]
+    score_threshold: 0.35
+    min_area_px: 150
+    orphan_rescue_min: 0.5
   - id: spalling
     sp35_row: T7.2-08
     prompts: ["spalled concrete", "concrete spalling", "broken concrete surface"]
     measure: area_percent_of_host
+    score_threshold: 0.45
+    min_area_px: 350
+    orphan_rescue_min: 0.5
   - id: exposed_reinforcement
     sp35_row: T7.2-12
     prompts: ["exposed rebar", "exposed steel reinforcement", "rusted reinforcement bars"]
     tile: true
     measure: area_percent_of_host
+    # metal_railing stays: in the pilot run 3 of the 5 rebar masks it removed were ornamental fences
+    # (IMG_4177, 4198, 4275) and 1 a cable (IMG_4192); only IMG_4211 (a rebar cage) was real steel.
     suppress_with: [cable, metal_railing]
+    score_threshold: 0.38
+    min_area_px: 200
+    orphan_rescue_min: 0.5
   - id: rust_stain
     sp35_row: T7.2-10
     prompts: ["rust stain on concrete", "rust streaks"]

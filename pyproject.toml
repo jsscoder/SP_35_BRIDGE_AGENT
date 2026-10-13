@@ -4,8 +4,11 @@ version = "0.0.1"
 description = "Draft IRC:SP:35-2024 bridge inspection reports (SAM 3.1 + deterministic Ch.7 engine)"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "fastapi>=0.115",
+  "python-multipart>=0.0.20",
   "pyyaml>=6",
   "pydantic>=2",
+  "uvicorn[standard]>=0.34",
 ]
 
 # The GPU worker (torch cu128, sam3, triton-windows) lives in .venv-win and is
@@ -14,6 +17,8 @@ dependencies = [
 dev = [
   "pytest>=8",
   "hypothesis>=6",
+  "httpx>=0.27",
+  "httpx2>=2.13",
   "numpy>=1.26",
   "pillow>=10",
 ]

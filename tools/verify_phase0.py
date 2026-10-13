@@ -109,7 +109,10 @@ def inference_outputs():
                 assert {"counts", "size"} <= set(det["rle"]) and len(det["bbox"]) == 4
                 n += 1
         for det in d["distresses"]:
-            assert det["sp35"].startswith("T7.") and det.get("host", {}).get("sp35"), f"{f.name}: distress unmapped"
+            host = det.get("host", {})
+            # the one unhosted case allowed: an orphan kept explicitly for the engineer to place
+            orphan = host.get("source") == "orphan_rescue" and det.get("review_required") is True
+            assert det["sp35"].startswith("T7.") and (host.get("sp35") or orphan), f"{f.name}: distress unmapped"
         assert (out / f"{f.stem}_overlay.png").exists(), f"overlay missing for {f.stem}"
     return f"{len(files)} photos, {n} detections, all mapped to SP:35"
 
