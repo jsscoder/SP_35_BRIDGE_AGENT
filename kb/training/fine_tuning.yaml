@@ -1,0 +1,75 @@
+# SP:35-2024 Hybrid Condition-State Calibrator & Detection Threshold Tuner
+# Repository: sp35-bridge-ai | Standard: IRC:SP:35-2024 Chapter 7
+# Enforces AGENTS.md: Zero hardcoded numbers, <= 3.4 GB VRAM on RTX 2050, AI proposes / Engineer certifies.
+
+task: "sp35_condition_state_calibration_and_threshold_tuning"
+version: "v1.0"
+seed: 42
+
+# 1. Knowledge Base Source of Truth (Loaded via sp35.kb.load_kb)
+kb:
+  kb_dir: "kb/sp35_2024"
+  condition_states: "kb/sp35_2024/condition_states.yaml"
+  distress_bridge: "kb/sp35_2024/distress_bridge.yaml"
+  distress_approach: "kb/sp35_2024/distress_approach.yaml"
+  anomaly_map: "kb/platform/anomaly_map.yaml"
+  sam3_prompts: "kb/prompts/sam3_prompts.yaml"
+
+# 2. Data & Ground-Truth Alignment (Patna Bridge 383 Images)
+data:
+  predictions_dir: "data/pilot/infer_all_v1"
+  images_dir: "data/pilot/patna_383"
+  labels_json: "data/labels/annotations.json"
+  output_dir: "data/pilot/calibrated_v1"
+  scored_statuses: ["ok", "ok_reduced"]
+  iou_match_threshold: 0.15          # Minimum mask-to-polygon IoU to pair SAM detection with engineer label
+  cv_folds: 5                        # 5-fold GroupKFold by photo (prevents same-photo leakage across splits)
+  stratify_target: "engineer_state"
+
+# 3. Upstream Detection & Denominator Calibration (Fixes IMG_4227 Whole-Frame Distortion)
+detection_calibration:
+  tune_sam_thresholds: true
+  threshold_search_grid: [0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60]
+  # When host component is missing ("photo tag (component not detected)" or "orphan_rescue"):
+  subtract_suppressors_from_frame: true
+  use_detected_components_union_as_proxy: true
+  min_structural_proxy_fraction: 0.12
+  # Rescue compound severity signals from postprocess "rejected" list (e.g., honeycombing under spalling)
+  extract_compound_rejected_overlap_iou: 0.40
+
+# 4. Feature Engineering & Vision Backbone (RTX 2050 <= 3.4 GB Safe)
+features:
+  use_rle_morphology: true           # Area ratios, bbox compactness, medial-axis width/length via EDT
+  use_compound_rejected_signals: true
+  use_rgb_severity_cues: true        # Darkness drop vs concrete ring, rust redness index, Laplacian roughness
+  vision_backbone:
+    enabled: true                    # Auto-falls back to false if --no-gpu or CPU-only oracle mode
+    model_name: "convnext_tiny.fb_in22k"
+    precision: "bf16"                # Matches vision/model.py bf16 invariant
+    crop_size: [224, 224]
+    crop_context_pad: 0.15
+    pca_embedding_dim: 16            # Compresses 768-d features to 16-d to prevent overfitting on <1500 crops
+    max_vram_gb: 3.4                 # Hard RTX 2050 VRAM ceiling
+
+# 5. Hybrid Condition-State Model (KB-Prior Residual + Gradient Boosted / MLP Calibrator)
+classifier:
+  architecture: "hybrid_kb_prior_calibrator"
+  tabular_head: "hist_gradient_boosting"  # Options: "catboost", "xgboost", "hist_gradient_boosting", "ordinal_mlp"
+  max_depth: 4
+  learning_rate: 0.05
+  max_iter: 250
+  min_samples_leaf: 8
+  l2_regularization: 2.0
+  # Visual proposal policy for site-measurement rows (T7.2-11 Cracking, T7.2-03 Scour, etc.)
+  propose_visual_state_for_site_rows: true
+  site_row_provenance_tag: "ai_visual_proposal_requires_site_certification"
+
+# 6. Bayes-Optimal Kappa & Safety-Critical Decoding
+decoding:
+  # Enforces null bands from distress_bridge.yaml (e.g. T7.2-16 Crushing & T7.4-TILT have State II = null)
+  enforce_kb_null_state_mask: true
+  # Minimizes expected quadratic distance (optimal for Quadratic Weighted Kappa) + asymmetric under-call penalty
+  loss_power: 2.0
+  undercall_penalty_multiplier: 2.5  # Penalizes predicting healthier state than engineer (e.g. II instead of IV)
+  state_IV_V_safety_boost: 1.35      # Extra sensitivity for Urgent (State IV) and Critical (State V) lists
+

@@ -29,7 +29,7 @@ def test_library_maps_every_class_to_sp35():
     """Audit A4: distresses carry their Table 7.2/7.3 row, components their C-code."""
     assert all(c.sp35_ref and c.sp35_ref.startswith("T7.") for c in LIB.of_kind("distress"))
     assert all(c.sp35_ref and c.sp35_ref.startswith("C") for c in LIB.of_kind("component"))
-    assert len(LIB.prompt_list()) == 93          # 47 component + 32 distress + 14 suppression prompts
+    assert len(LIB.prompt_list()) == 104         # 49 component + 41 distress + 14 suppression prompts (v2)
     assert LIB.by_id("spalling").sp35_ref == "T7.2-08"
 
 
@@ -281,7 +281,7 @@ def test_per_class_thresholds_and_minimum_areas():
     assert "below class threshold 0.60" in reasons["crash_barrier"]
     res = postprocess([pier, det("crack", small(140), 0.9)], LIB)
     assert "below minimum 150" in res.rejected[0].reject_reason
-    assert LIB.min_threshold == 0.35                                     # SAM's floor = lowest class threshold
+    assert LIB.min_threshold == 0.25                                     # SAM's floor = lowest class threshold (v2)
 
 
 def test_co_occurring_distresses_share_a_region():

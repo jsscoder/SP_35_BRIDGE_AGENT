@@ -21,6 +21,8 @@ dev = [
   "httpx2>=2.13",
   "numpy>=1.26",
   "pillow>=10",
+  "scipy>=1.11",
+  "scikit-learn>=1.4",
 ]
 ingest = [
   "pillow>=10",

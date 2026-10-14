@@ -16,7 +16,13 @@
 # - SAM's own confidence floor is the lowest class threshold, so lower-scoring masks of every class now
 #   reach post-processing and are rejected there with a reason (evidence for WP2.5).
 
-version: v1
+# v2 (14 Oct 2026), from the engineer's labels (data/labels/yugmi_engineer_annotations_2026-10-13.json):
+# all 22 labelled defects SAM missed were local damage on expansion joints (7), bearings (5) and pier
+# protection works (6, no prompt before). Added pier_protection (C2.9), expansion_joint_damage (T7.3-24),
+# rutting (T7.3-14); drain prompts on debris_clogging; road prompts on patching / road_crack. These rare,
+# thin classes use threshold 0.25, which also lowers SAM's own floor for every prompt (see v1 note).
+
+version: v2
 defaults:
   score_threshold: 0.5
   min_area_px: 400          # at model input scale
@@ -64,6 +70,7 @@ components:
   - {id: approach_wall,    sp35: C1.3, prompts: ["retaining wall beside road", "approach retaining wall"],
      note: "Flyover approach walls; engineer confirms C1.3 vs C3.4 (river retaining wall)."}
   - {id: slope_protection, sp35: C1.8, prompts: ["stone pitching on slope", "embankment slope protection"]}
+  - {id: pier_protection,  sp35: C2.9, prompts: ["pier protection works", "stone pitching around pier base"]}
 
 # Pass 2 — distresses. `sp35_row` points at distress_bridge.yaml / distress_approach.yaml.
 distresses:
@@ -117,8 +124,10 @@ distresses:
     measure: count_and_area_percent
   - id: debris_clogging
     sp35_row: T7.2-25          # alias "Clogging" (E13); engineer confirms
-    prompts: ["debris on pier cap", "soil and rubble heap", "clogged drain"]
+    prompts: ["debris on pier cap", "soil and rubble heap", "clogged drain",
+              "clogged bridge drain pipe", "silting debris at scupper", "blocked drainage spout"]
     measure: count
+    score_threshold: 0.25
   - id: crushing
     sp35_row: T7.2-16
     prompts: ["crushed concrete edge", "broken bearing pedestal"]
@@ -134,13 +143,27 @@ distresses:
     measure: count
   - id: patching
     sp35_row: T7.3-11
-    prompts: ["patched road surface", "patch repair on road"]
+    prompts: ["patched road surface", "patch repair on road", "asphalt pothole patch"]
     measure: area_percent_of_host
+    score_threshold: 0.25
   - id: road_crack
     sp35_row: T7.3-03          # longitudinal T7.3-02 / transverse T7.3-03 chosen by orientation
-    prompts: ["crack in road surface"]
+    prompts: ["crack in road surface", "wearing course cracking"]
     tile: true
     measure: width_mm_needs_scale
+    score_threshold: 0.25
+    min_area_px: 150
+  - id: rutting
+    sp35_row: T7.3-14
+    prompts: ["rutting on bridge deck"]
+    measure: depth_mm_needs_site_measurement
+    score_threshold: 0.25
+  - id: expansion_joint_damage
+    sp35_row: T7.3-24          # Table 7.3 "Joint damage" (%), also used for deck expansion joints (anomaly_map)
+    prompts: ["damaged expansion joint gap", "cracked joint seal rubber", "broken joint steel plate"]
+    measure: area_percent_of_host
+    score_threshold: 0.25
+    min_area_px: 150
 
 # Not attempted from photos (needs NDT, survey or engineer input):
 not_from_photos:

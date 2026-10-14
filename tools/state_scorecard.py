@@ -58,7 +58,7 @@ def pipeline_state(label: Label, result: dict, cond: Optional[dict], min_overlap
     prop = next((p for p in (cond or {}).get("proposals", [])
                  if any(x["index"] == idx and x.get("frame", "photo") == "photo" for x in p["detections"])), None)
     out = {"state": prop["proposed_state"] if prop else None, "sam_class": det["class"], "sam_row": det["sp35"],
-           "overlap": round(best, 3), "status": prop["status"] if prop else "no proposal"}
+           "overlap": round(best, 3), "status": prop["status"] if prop else "no proposal", "sam_det_idx": idx}
     out["why"] = f"SAM {det['class']} covers {best:.0%} of the polygon; skill: {out['status']}"
     return out
 
@@ -110,24 +110,45 @@ def metrics(pairs: List[Tuple[str, Optional[str]]]) -> dict:
             "under_calls": under, "over_calls": over, "qwk_answered": qwk(answered), "confusion": conf}
 
 
-def qwk(pairs) -> Optional[float]:
-    if len(pairs) < 2:
-        return None
-    k = len(STATES)
-    o = np.zeros((k, k))
-    for g, p in pairs:
-        o[RANK[g], RANK[p]] += 1
-    e = np.outer(o.sum(1), o.sum(0)) / o.sum()
+def quadratic_weighted_kappa(data) -> Optional[float]:
+    """Computes Quadratic Weighted Kappa from either a list of (gt, pred) pairs or a KxK confusion matrix."""
+    if isinstance(data, np.ndarray) and data.ndim == 2:
+        k = data.shape[0]
+        o = data.astype(float)
+        if o.sum() < 2:
+            return 0.0
+    else:
+        pairs = [(g, p) for g, p in data if p is not None]
+        if len(pairs) < 2:
+            return None
+        k = len(STATES)
+        o = np.zeros((k, k), dtype=float)
+        for g, p in pairs:
+            if g in RANK and p in RANK:
+                o[RANK[g], RANK[p]] += 1
+    total = o.sum()
+    if total <= 0:
+        return 0.0 if isinstance(data, np.ndarray) else None
+    e = np.outer(o.sum(1), o.sum(0)) / total
     w = np.array([[(i - j) ** 2 for j in range(k)] for i in range(k)]) / (k - 1) ** 2
     den = (w * e).sum()
     return round(1.0 - (w * o).sum() / den, 3) if den else None
 
 
+qwk = quadratic_weighted_kappa
+
+
 def score(labels_path: Path, predictions: Path, conditions: Optional[Path] = None, min_overlap: float = 0.1,
-          kb: Optional[KnowledgeBase] = None) -> dict:
+          kb: Optional[KnowledgeBase] = None, calibrator: Optional[Path] = None) -> dict:
     kb = kb or load_kb()
     conditions = conditions or predictions / "conditions"
     labels = load_labels(labels_path, kb)
+    cal_model = None
+    if calibrator:
+        from vision.condition_calibrator import SP35ConditionCalibrator
+        cal_path = Path(calibrator)
+        if cal_path.exists():
+            cal_model = SP35ConditionCalibrator.load(cal_path, kb=kb)
     per_member = Counter((l.photo, l.sub_code, l.support, l.span, l.row_id) for l in labels if l.usable)
     rows, skipped = [], Counter()
     for lab in labels:
@@ -144,10 +165,28 @@ def score(labels_path: Path, predictions: Path, conditions: Optional[Path] = Non
         cond = json.loads(cf.read_text(encoding="utf-8")) if cf.exists() else None
         pred = pipeline_state(lab, result, cond, min_overlap)
         orc = oracle_state(lab, result, kb, per_member[(lab.photo, lab.sub_code, lab.support, lab.span, lab.row_id)])
-        rows.append({"annotation_id": lab.annotation_id, "photo": lab.photo, "member": lab.sub_code,
+        cal_res = None
+        if cal_model and pred.get("sam_det_idx") is not None and lab.row_id:
+            dets = result.get("distresses", [])
+            idx = pred["sam_det_idx"]
+            if idx < len(dets):
+                best_det = dets[idx]
+                target_sp35 = best_det.get("host", {}).get("sp35")
+                comp_masks = [decode_rle(c["rle"]) for c in result.get("components", [])
+                              if "rle" in c and (c.get("sp35") == target_sp35 or c.get("sp35") == lab.sub_code)]
+                host_m = np.logical_or.reduce(comp_masks) if comp_masks else None
+                try:
+                    pdata = cal_model.predict_proposal([best_det], result, host_m, lab.row_id)
+                    cal_res = {"state": pdata["proposed_state"], "why": pdata["explanation"]}
+                except Exception as ex:
+                    cal_res = {"state": None, "why": f"calibrator error: {ex}"}
+        row_entry = {"annotation_id": lab.annotation_id, "photo": lab.photo, "member": lab.sub_code,
                      "member_name": kb.sub_names.get(lab.sub_code), "support": lab.support, "span": lab.span,
                      "anomaly": lab.anomaly, "row": lab.row_id, "engineer_state": lab.state,
-                     "pipeline": pred, "oracle": orc})
+                     "pipeline": pred, "oracle": orc}
+        if cal_res is not None:
+            row_entry["calibrated"] = cal_res
+        rows.append(row_entry)
     gts = [r["engineer_state"] for r in rows]
     majority = Counter(gts).most_common(1)[0][0] if gts else None
     report = {
@@ -164,6 +203,8 @@ def score(labels_path: Path, predictions: Path, conditions: Optional[Path] = Non
                                                if not r["oracle"]["state"])),
         "rows": rows,
     }
+    if cal_model:
+        report["calibrated"] = metrics([(r["engineer_state"], (r.get("calibrated") or {}).get("state")) for r in rows])
     return report
 
 
@@ -177,13 +218,16 @@ def write_markdown(report: dict, path: Path) -> None:
            f"Engineer states: {report['engineer_states']}", "",
            "| Method | Answered | Exact (all labels) | Exact (answered) | Within one | Under-calls | Over-calls | QWK |",
            "|---|---|---|---|---|---|---|---|",
-           line("Pipeline (SAM 3.1 + skill)", report["pipeline"]),
+           line("Pipeline (SAM 3.1 + skill)", report["pipeline"])]
+    if "calibrated" in report:
+        out.append(line("Calibrated (SP35ConditionCalibrator)", report["calibrated"]))
+    out.extend([
            line("Oracle: measurement + KB on the engineer's polygon", report["oracle_measurement_route"]),
            line(f"Baseline: always {report['baseline_majority']['state']}", report["baseline_majority"]), "",
            f"Pipeline abstained because: {report['pipeline_miss_reasons']}", "",
            f"Oracle abstained because: {report['oracle_abstain_reasons']}", "",
            f"Skipped labels: {report['skipped']}", "",
-           "| Photo | Member | Anomaly → row | Engineer | Pipeline | Oracle | Why (pipeline / oracle) |", "|---|---|---|---|---|---|---|"]
+           "| Photo | Member | Anomaly → row | Engineer | Pipeline | Oracle | Why (pipeline / oracle) |", "|---|---|---|---|---|---|---|"])
     for r in report["rows"]:
         where = r["support"] or (f"span {r['span']}" if r["span"] else "")
         out.append(f"| {r['photo']} | {r['member']} {where} | {r['anomaly']} → {r['row']} | {r['engineer_state']} | "
@@ -197,16 +241,21 @@ def main(argv=None) -> int:
     ap.add_argument("--labels", type=Path, required=True)
     ap.add_argument("--predictions", type=Path, required=True, help="vision.infer output folder")
     ap.add_argument("--conditions", type=Path, help="default: <predictions>/conditions")
+    ap.add_argument("--calibrator", type=Path, help="optional path to calibrator.pkl")
     ap.add_argument("--outdir", type=Path, help="default: <predictions>/scorecard")
     ap.add_argument("--min-overlap", type=float, default=0.1, help="share of the polygon a SAM mask must cover")
     args = ap.parse_args(argv)
-    report = score(args.labels, args.predictions, args.conditions, args.min_overlap)
+    report = score(args.labels, args.predictions, args.conditions, args.min_overlap, calibrator=args.calibrator)
     outdir = args.outdir or args.predictions / "scorecard"
     outdir.mkdir(parents=True, exist_ok=True)
     (outdir / "state_scorecard.json").write_text(json.dumps(report, indent=1), encoding="utf-8")
     write_markdown(report, outdir / "state_scorecard.md")
     print(json.dumps({k: report[k] for k in ("scored", "skipped", "engineer_states")}, indent=1))
-    for k in ("pipeline", "oracle_measurement_route", "baseline_majority"):
+    methods_to_print = ["pipeline"]
+    if "calibrated" in report:
+        methods_to_print.append("calibrated")
+    methods_to_print.extend(["oracle_measurement_route", "baseline_majority"])
+    for k in methods_to_print:
         m = report[k]
         print(f"{k:26s} answered {m['answered']}/{m['labels']}  exact(all) {m['exact_all']}  "
               f"exact(answered) {m['exact_answered']}  under {m['under_calls']}  over {m['over_calls']}  qwk {m['qwk_answered']}")

@@ -332,7 +332,7 @@ _BASIS = {"union of masks": "bridge-part outline", "sum of per-mask coverage": "
 
 
 def propose_photo(result: dict, kb: KnowledgeBase, frame_as_member: bool = False, lib=None,
-                  mode: str = "max") -> dict:
+                  mode: str = "max", calibrator=None) -> dict:
     """Proposals for one inference JSON (already parsed), each with its reasoning trace.
 
     mode "max" (default): give a state to every detection the KB can rate, whatever SAM
@@ -395,7 +395,39 @@ def propose_photo(result: dict, kb: KnowledgeBase, frame_as_member: bool = False
                 p.update(status="proposed_visual_estimate", value=value, method=method,
                          proposed_state=res.state, state_name=state.name,
                          severity=state.summary, explanation=res.explanation)
-        p["basis"] = _BASIS.get(facts.get("how"), "count" if "count" in facts else None) if res else None
+            if calibrator is not None:
+                host_mask = None
+                if host_sp35:
+                    comp_masks = [decode_rle(c["rle"]) for c in result.get("components", [])
+                                  if "rle" in c and (c.get("sp35") == host_sp35 or c.get("class") == host_class)]
+                    if comp_masks:
+                        host_mask = np.logical_or.reduce(comp_masks)
+                cal_pred = calibrator.predict_proposal(dets, result, host_mask, rate_row.id)
+                cal_state = cal_pred["proposed_state"]
+                state_obj = next((s for s in kb.states.states if s.id == cal_state), None)
+                cal_state_name = state_obj.name if state_obj else cal_state
+                cal_summary = state_obj.summary if state_obj else ""
+
+                if value is None:
+                    p.update(
+                        status="calibrated_visual_proposal",
+                        value=cal_pred["value"],
+                        method=cal_pred["explanation"],
+                        proposed_state=cal_state,
+                        state_name=cal_state_name,
+                        severity=cal_summary,
+                        explanation=cal_pred["explanation"],
+                        calibration=cal_pred,
+                    )
+                    flags.append(cal_pred["basis"])
+                    if cal_pred["requires_site_measurement"]:
+                        flags.append("ai_visual_proposal_requires_site_certification")
+                else:
+                    p["calibration"] = cal_pred
+                    flags.append(f"calibrator predicts State {cal_state} ({cal_pred['confidence']:.2f} conf)")
+        p["basis"] = _BASIS.get(facts.get("how"), "count" if "count" in facts else None) if res else (
+            p.get("calibration", {}).get("basis") if p.get("proposed_state") else None
+        )
         p["flags"] = flags
         if notes:
             p["review_notes"] = notes
@@ -416,9 +448,13 @@ def _inputs(path: Path) -> Iterable[Path]:
 
 
 def run(input_path: Path, outdir: Path, frame_as_member: bool = False, kb: Optional[KnowledgeBase] = None,
-        mode: str = "max") -> dict:
+        mode: str = "max", calibrator=None) -> dict:
     kb = kb or load_kb()
     lib = load_prompt_library(PROMPTS)
+    if calibrator and isinstance(calibrator, (str, Path)):
+        from vision.condition_calibrator import SP35ConditionCalibrator
+        cal_p = Path(calibrator)
+        calibrator = SP35ConditionCalibrator.load(cal_p, kb=kb) if cal_p.exists() else None
     outdir.mkdir(parents=True, exist_ok=True)
     header = {"kb_version_hash": kb.version_hash, "kb_status": kb.status, "kb_signed": kb.is_signed,
               "frame_as_member": frame_as_member, "mode": mode,
@@ -431,7 +467,7 @@ def run(input_path: Path, outdir: Path, frame_as_member: bool = False, kb: Optio
         if not isinstance(result, dict) or "photo" not in result:
             continue
         photos += 1
-        proposal = dict(header, **propose_photo(result, kb, frame_as_member, lib, mode))
+        proposal = dict(header, **propose_photo(result, kb, frame_as_member, lib, mode, calibrator=calibrator))
         (outdir / f"{Path(result['photo']).stem}.conditions.json").write_text(json.dumps(proposal, indent=1),
                                                                               encoding="utf-8")
         props = proposal["proposals"]
@@ -494,6 +530,7 @@ def main(argv=None) -> int:
     src.add_argument("--input", type=Path, help="one <photo>.json or a folder from vision.infer")
     src.add_argument("--tally", type=Path, help="a reviewed conditions.csv: count errors by stage and where to fix them")
     ap.add_argument("--outdir", type=Path, help="default: <input folder>/conditions")
+    ap.add_argument("--calibrator", type=Path, help="optional path to calibrator.pkl to refine condition states")
     ap.add_argument("--strict", action="store_true",
                     help="only states measured against an outlined bridge part (default: max, rate every "
                          "detection the KB can rate and flag the weaker ones)")
@@ -507,7 +544,7 @@ def main(argv=None) -> int:
         return 0
     base = args.input.parent if args.input.is_file() else args.input
     summary = run(args.input, args.outdir or base / "conditions", args.frame_as_member,
-                  mode="strict" if args.strict else "max")
+                  mode="strict" if args.strict else "max", calibrator=args.calibrator)
     print(json.dumps({k: summary[k] for k in ("mode", "photos", "photos_by_outcome", "proposals", "by_status",
                                                "proposed_states", "states_by_basis", "kb_signed")}, indent=1))
     return 0
