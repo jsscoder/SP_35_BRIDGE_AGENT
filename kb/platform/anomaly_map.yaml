@@ -1,0 +1,34 @@
+# Inspection-platform anomaly names -> IRC:SP:35-2024 distress rows (codes only, no SP:35 numbers).
+# Used to read engineer annotations exported from the platform (data/labels/*.json).
+# Names already in kb/sp35_2024 as Table 7.6 aliases (Clogging, Missing, Rusting, Staining,
+# Crushing/Damaged, Not Visible) are resolved there first; this file covers the rest.
+# When a name exists in both tables, the row is chosen by the member: approaches (C1.x) and the
+# wearing surface (C6.1) use Table 7.3, everything else Table 7.2.
+# Status: draft-for-signoff — the bridge engineer confirms each line (marked `confirm:` where a choice was made).
+
+status: draft-for-signoff
+table_7_3_members: [C1, C6.1]      # group prefix or exact code
+
+anomalies:
+  Clogging: [T7.2-25]
+  Corner Spalling: [T7.2-08, T7.3-31]       # on concrete members = spalling (%); on the road = Table 7.3 corner spalling (mm)
+  Crushing / Damaged: [T7.2-16]
+  Deformation / Deflection / Tilt: [T7.2-05]
+  Degradation / Wear & Tear: [T7.2-19]
+  Efflorescence / Leaching: [T7.2-15]       # confirm: efflorescence row; T7.2-09 (staining/leaching) is the alternative
+  Erosion: [T7.2-01, T7.3-19]
+  Exposed Reinforcement: [T7.2-12]
+  Joint damage: [T7.3-24]                   # Table 7.3 is the only "Joint damage" row; used for expansion joints too (confirm)
+  Lane / Shoulder drop: [T7.3-17]
+  Missing: [T7.2-20, T7.3-18]
+  Not Visible: [engineer_judgement]
+  Patching: [T7.3-11]
+  Pop out: [T7.3-27]
+  Rusting: [T7.2-10]
+  Settlement / Bumps / Heave: [T7.3-09]
+  Silting: [T7.2-26, T7.3-20]
+  Spalling: [T7.2-08]
+  Staining: [T7.2-09]
+  Undesired Restraints: [T7.2-23]
+  Unevenness / Depression: [T7.2-18]
+  Vegetation: [T7.2-04, T7.3-32]

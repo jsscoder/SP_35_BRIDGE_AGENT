@@ -17,7 +17,10 @@ If there is no inference yet, run it first (GPU, `.venv-win`):
 - Single photo: `uv run python -m vision.condition_proposals --input <dir>\IMG_4227.json`
 - Batch (folder): `uv run python -m vision.condition_proposals --input <dir>`
 - Output (default `<dir>\conditions\`): `<photo>.conditions.json` per photo, `conditions.csv` (one row per distress row per host per photo), `summary.json` (counts by status and state, KB version and signed flag).
-- `--frame-as-member` only for close-ups whose whole frame is the tagged member; the method text says so.
+- **Mode.** Default `max`: every detection the KB can rate gets a state, whatever SAM knows about the bridge part (the part comes later from a part classifier). Each proposal says how its value was obtained in `basis` (`bridge-part outline`, `whole photo`, `count`) and lists what makes it weaker in `flags` (no part found, frame used as the part, mask covering the whole part, Table 7.3 twin used on the wearing course). `--strict` gives only states measured against an outlined part.
+- Never in either mode: a mm / m / gradient value (crack width, scour, deflection) — those stay `needs_site_measurement`; and no "I" for photos where SAM found nothing (SAM missed 22 of 34 engineer-rated defects).
+- **Known weakness (13 Oct 2026, 167-photo run):** max mode rates 97 photos (strict: 21), but on the 12 engineer-rated defects it reaches it said V every time where the engineer said I–III, because SAM's "spalling" masks cover a median 47 % of the frame. Treat `whole photo` states as triage, not BHI input, until SAM's masks are fixed; check with `tools/state_scorecard.py`.
+- `--frame-as-member` (strict mode only) for close-ups whose whole frame is the tagged member; the method text says so.
 
 ## How a state is proposed (all numbers from `kb/sp35_2024/*.yaml` via `sp35.condition.condition_state`)
 | Row unit (Table 7.2 / 7.3) | Value used | Status |

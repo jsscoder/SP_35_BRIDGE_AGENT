@@ -75,7 +75,7 @@ def test_overlapping_masks_on_a_host_are_counted_once():
 def test_damage_over_most_of_the_member_needs_a_mask_check():
     pier = {"class": "pier", "sp35": "C2.7", "rle": rle(box_mask(0, 0, 100, 100))}
     pieces = [dist("spalling", "T7.2-08", coverage=0.3, rle=rle(box_mask(x, 0, x + 30, 100))) for x in (0, 30, 60)]
-    p = only(propose_photo(dict(photo(*pieces), components=[pier]), KB))
+    p = only(propose_photo(dict(photo(*pieces), components=[pier]), KB, mode="strict"))
     assert p["proposed_state"] is None and p["status"] == "needs_mask_check"
 
 
@@ -106,14 +106,14 @@ def test_count_rows_use_the_count_in_the_photo():
     assert "lower bound" in p["method"]
 
 
-def test_orphans_and_tag_hosts_and_wearing_course_get_no_state():
+def test_strict_mode_gives_orphans_tag_hosts_and_wearing_course_no_state():
     orphan = dist("spalling", "T7.2-08", host=("unassigned_structural", None, "orphan_rescue"), coverage=None)
-    assert only(propose_photo(photo(orphan), KB))["status"] == "needs_host"
+    assert only(propose_photo(photo(orphan), KB, mode="strict"))["status"] == "needs_host"
     tagged = dist("spalling", "T7.2-08", host=("pier", "C2.7", "photo tag"), coverage=0.15)
-    assert only(propose_photo(photo(tagged), KB))["status"] == "needs_member_extent"
+    assert only(propose_photo(photo(tagged), KB, mode="strict"))["status"] == "needs_member_extent"
     road = dist("crack", "T7.2-11", host=("wearing_surface", "C6.1", "detected"))
     road["host"]["note"] = "host is wearing course / approach: rate with Table 7.3"
-    assert only(propose_photo(photo(road), KB))["status"] == "needs_table_7_3_row"
+    assert only(propose_photo(photo(road), KB, mode="strict"))["status"] == "needs_table_7_3_row"
 
 
 def test_frame_as_member_is_opt_in_and_labelled():
@@ -124,7 +124,7 @@ def test_frame_as_member_is_opt_in_and_labelled():
 
 def test_a_mask_covering_the_whole_member_is_not_rated():
     """IMG_4195: one 'spalling' mask covered 99.8 % of the pier mask; that is not state V."""
-    p = only(propose_photo(photo(dist("spalling", "T7.2-08", coverage=0.998)), KB))
+    p = only(propose_photo(photo(dist("spalling", "T7.2-08", coverage=0.998)), KB, mode="strict"))
     assert p["proposed_state"] is None and p["status"] == "needs_mask_check"
 
 
@@ -247,3 +247,57 @@ def test_extent_uses_only_the_member_the_damage_is_on():
     p = only(propose_photo(dict(photo(spall), components=piers), KB))
     assert p["value"] == 15.0 and p["proposed_state"] == "IV"           # not 5 % of all three piers
     assert "1 member mask(s) touched, of 3 in the photo" in p["reasoning"][2]["finding"]
+
+
+# ------------------------------------------------------------ max mode (default): rate as much as possible
+def test_max_mode_rates_orphans_over_the_whole_photo():
+    """Damage with no bridge part found: extent over the frame, flagged, part assigned later."""
+    m = box_mask(0, 0, 30, 50)                                         # 1,500 of 10,000 px = 15 %
+    orphan = dist("spalling", "T7.2-08", host=("unassigned_structural", None, "orphan_rescue"), coverage=None,
+                  rle=rle(m), area_px=1500)
+    p = only(propose_photo(dict(photo(orphan), processed_size=[100, 100]), KB))
+    assert p["value"] == 15.0 and p["proposed_state"] == "IV" and p["basis"] == "whole photo"
+    assert any("no bridge part found" in f for f in p["flags"])
+    assert "1,500 / 10,000 px = 15.00 %" in p["reasoning"][2]["finding"]
+    assert p["final_state"] is None and p["requires_engineer"] is True
+
+
+def test_max_mode_rates_tag_hosts_and_whole_member_masks_with_flags():
+    tagged = dist("spalling", "T7.2-08", host=("pier", "C2.7", "photo tag"), coverage=0.15, area_px=1500)
+    p = only(propose_photo(dict(photo(tagged), processed_size=[100, 100]), KB))
+    assert p["proposed_state"] == "IV" and p["basis"] == "whole photo"
+    whole = only(propose_photo(photo(dist("spalling", "T7.2-08", coverage=0.998)), KB))
+    assert whole["proposed_state"] == "V" and any("may be the whole part" in f for f in whole["flags"])
+    assert whole["basis"] == "bridge-part outline"
+
+
+def test_max_mode_uses_the_table_7_3_twin_on_the_wearing_course():
+    veg = dist("vegetation", "T7.2-04", host=("wearing_surface", "C6.1", "detected"), coverage=0.30)
+    veg["host"]["note"] = "host is wearing course / approach: rate with Table 7.3"
+    p = only(propose_photo(photo(veg), KB))
+    assert p["rated_row"] == "T7.3-32" and p["table"] == "7.3"
+    assert any("Table 7.3 T7.3-32" in f for f in p["flags"])
+    assert p["proposed_state"] == condition_state(KB, "T7.3-32", 30.0).state
+
+
+def test_max_mode_still_never_invents_millimetres():
+    orphan = dist("crack", "T7.2-11", host=("unassigned_structural", None, "orphan_rescue"), coverage=None)
+    p = only(propose_photo(photo(orphan), KB))
+    assert p["proposed_state"] is None and p["status"] == "needs_site_measurement"
+
+
+def test_run_reports_photo_outcomes(tmp_path):
+    src = tmp_path / "infer"
+    src.mkdir()
+    orphan = dist("spalling", "T7.2-08", host=("unassigned_structural", None, "orphan_rescue"), coverage=None,
+                  rle=rle(box_mask(0, 0, 30, 50)))
+    (src / "IMG_1.json").write_text(json.dumps(dict(photo(orphan), processed_size=[100, 100])), encoding="utf-8")
+    (src / "IMG_2.json").write_text(json.dumps(dict(photo(), photo="IMG_2.jpg")), encoding="utf-8")
+    (src / "IMG_3.json").write_text(json.dumps(dict(photo(dist("crack", "T7.2-11")), photo="IMG_3.jpg")),
+                                    encoding="utf-8")
+    s = run(src, tmp_path / "max")
+    assert s["mode"] == "max" and s["photos_by_outcome"] == {
+        "at least one state": 1, "no distress found by SAM": 1, "distress found, no state": 1}
+    assert s["states_by_basis"] == {"whole photo": 1}
+    strict = run(src, tmp_path / "strict", mode="strict")
+    assert strict["photos_by_outcome"].get("at least one state", 0) == 0
